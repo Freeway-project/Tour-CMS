@@ -6,7 +6,7 @@ Its job is to turn **paid-ad traffic** (Google Ads, Meta) into bookings, so **sp
 ## Stack (do not change without being told)
 - pnpm workspaces monorepo, Node 22, pnpm 9, TypeScript `strict` everywhere
 - `apps/web`: Astro 5 (static output by default), Tailwind CSS 4, no React/Vue unless a task asks for an island
-- `apps/studio`: Sanity Studio v3
+- `apps/studio`: Sanity Studio v4
 - `packages/ui`: shared Astro components and design tokens
 - `packages/schema`: Sanity schema definitions + generated TS types, imported by both apps
 - Hosting: Cloudflare Pages (`@astrojs/cloudflare` adapter only if a task needs SSR)
