@@ -1,0 +1,50 @@
+[
+  {
+    "id": "weather",
+    "question": "What happens if it rains?",
+    "answer": "We run in the rain, snow and shine — the bus is heated and the falls are just as impressive in bad weather. The only exception is a severe weather warning from Environment Canada, in which case we reschedule you for free or refund you in full.\n\nBring a light rain jacket if the forecast looks wet. Ponchos are handed out before the boat cruise.",
+    "tags": ["weather", "boat", "what-to-bring"]
+  },
+  {
+    "id": "boat-season",
+    "question": "When does the boat cruise run?",
+    "answer": "The Hornblower cruise usually runs from early May to late November. In the winter months we replace it with Journey Behind the Falls, the tunnels and viewing platforms at the base of Horseshoe Falls.\n\nIf you book a package that includes the cruise outside the season, we swap the ticket automatically and refund the difference.",
+    "tags": ["boat", "season", "winter"]
+  },
+  {
+    "id": "passports",
+    "question": "Do I need a passport?",
+    "answer": "No. The whole tour stays on the Canadian side of the border, so a passport is not required — even for US citizens. Bring photo ID if you would like it for the boat, but it is not checked.",
+    "tags": ["documents", "border"]
+  },
+  {
+    "id": "children",
+    "question": "Is the tour suitable for children?",
+    "answer": "Yes. Children aged 3–12 travel at a reduced rate and children under 3 travel free on a parent's lap. The day tour works well for families: there is free time at Table Rock and the boat ride is short enough for most kids.\n\nThe wine country tour is adults only (19+).",
+    "tags": ["family", "children", "pricing"]
+  },
+  {
+    "id": "accessibility",
+    "question": "Do you accommodate wheelchairs and strollers?",
+    "answer": "Our buses have space for one folding wheelchair or two strollers, but please tell us when you book so we can keep it free. The Table Rock centre and the boat are wheelchair accessible. Some viewpoints along the Niagara Parkway are gravel, so a companion is helpful.",
+    "tags": ["accessibility"]
+  },
+  {
+    "id": "cancellation",
+    "question": "Can I cancel my booking?",
+    "answer": "You can cancel free of charge up to 24 hours before your departure and we refund the full amount. Inside 24 hours the full price applies because we hold your seats and pickups.\n\nTo cancel, reply to your confirmation email with your booking reference.",
+    "tags": ["cancellation", "refund"]
+  },
+  {
+    "id": "what-to-bring",
+    "question": "What should I bring?",
+    "answer": "Comfortable shoes, a light rain jacket, sunscreen and a refillable water bottle. The boat cruise gets you close enough to the falls to feel the spray, so a dry layer is a good idea even on a sunny day.\n\nLeave large luggage at your hotel — there is limited space on the bus.",
+    "tags": ["what-to-bring", "boat"]
+  },
+  {
+    "id": "pickup",
+    "question": "Where do you pick up?",
+    "answer": "We pick up from Union Station, the Chelsea Hotel, the Fairmont Royal York and North York Centre. Choose the closest point when you book and arrive five minutes early — the bus cannot wait past its slot.\n\nMost downtown hotels are within a short walk of one of these stops.",
+    "tags": ["pickup", "logistics"]
+  }
+]

@@ -1,36 +1,40 @@
 # Tour-CMS — agent instructions
 
-Marketing and booking website for a Toronto tour operator (Niagara Falls day tours and more).
+Marketing and booking website for a one-person Toronto tour operator (Niagara Falls tours). Domain: torontoniagara.ca.
 Its job is to turn **paid-ad traffic** (Google Ads, Meta) into bookings, so **speed and conversion come first**.
+The owner must be able to change tours, packages, prices and dates, and see bookings, without a developer.
 
 ## Stack (do not change without being told)
-- pnpm workspaces monorepo, Node 22, pnpm 9, TypeScript `strict` everywhere
-- `apps/web`: Astro 5 (static output by default), Tailwind CSS 4, no React/Vue unless a task asks for an island
-- `apps/studio`: Sanity Studio v4
-- `packages/ui`: shared Astro components and design tokens
-- `packages/schema`: Sanity schema definitions + generated TS types, imported by both apps
-- Hosting: Cloudflare Pages (`@astrojs/cloudflare` adapter only if a task needs SSR)
+- **One Astro 5 app at the repo root** (no monorepo), pnpm 9, Node 22, TypeScript `strict`
+- Tailwind CSS 4. No React/Vue unless a task asks for an island.
+- Hosting: **Cloudflare** via `@astrojs/cloudflare`. Pages are **prerendered by default**; only routes that need the server set `export const prerender = false`.
+- **Supabase** (Postgres + Auth) for tours, packages, add-ons, departures, bookings, and the owner's admin login. SQL lives in `supabase/migrations/`.
+- Marketing copy (FAQ, reviews, site settings, page text) lives in **Astro content collections** in `src/content/`.
+- Payments: Stripe Checkout (later task). Email: a free-tier transactional email API (later task).
 
 ## Hard rules
 1. **Performance budget per page:** ≤ 50 KB JS (gzipped), LCP < 1.5 s on mobile 4G, CLS < 0.05, Lighthouse ≥ 95 in every category.
 2. No client-side JS unless needed. Prefer `<script>` in an Astro component or a `client:visible`/`client:idle` island. Never `client:load` without a reason in a comment.
 3. Images: use `astro:assets` `<Image>`/`<Picture>` (AVIF + WebP), always set width/height, lazy-load below the fold, `fetchpriority="high"` on the hero only.
 4. Fonts: self-hosted, `font-display: swap`, preload only the one weight used above the fold.
-5. Third-party scripts (GTM, pixels, booking widget) must never block render. Load them after consent and/or on interaction.
-6. Accessibility: semantic HTML, labelled controls, visible focus, colour contrast AA.
-7. No secrets in the repo. Use `.env` (gitignored) and add each new variable to `.env.example`.
-8. Keep changes scoped to the task. Don't reformat unrelated files or add dependencies the task didn't ask for.
-9. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
+5. Third-party scripts (GTM, pixels, Stripe) must never block render. Load them after consent and/or on interaction.
+6. Accessibility: semantic HTML, labelled controls, visible focus (`focus-visible`), colour contrast AA.
+7. **Money is integer cents** everywhere (DB and TS). Currency CAD. Ontario HST 13% is computed on the server, never trusted from the browser.
+8. **Secrets:** `SUPABASE_SERVICE_ROLE_KEY` and any other secret is server-only (declared with `astro:env` as `context: "server", access: "secret"`). Never import it into client code. Use `.env` (gitignored) and keep `.env.example` up to date.
+9. Every Supabase table has **RLS enabled**. The anonymous role can only read public catalogue data. Bookings are never readable or writable by anon directly.
+10. Keep changes scoped to the task. Don't reformat unrelated files or add dependencies the task didn't ask for.
+11. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
 
 ## Commands (must all pass before a task is done)
 ```
 pnpm install
 pnpm lint
 pnpm typecheck
+pnpm test
 pnpm build
 ```
 
 ## Conventions
 - File names: kebab-case. Components: PascalCase `.astro`.
-- Currency CAD, locale `en-CA`, timezone `America/Toronto`.
-- Content comes from Sanity. Until a task wires it up, use typed fixtures in `apps/web/src/data/`.
+- Locale `en-CA`, timezone `America/Toronto`.
+- SQL: snake_case. TS: camelCase. Map between them in `src/lib/db/`.

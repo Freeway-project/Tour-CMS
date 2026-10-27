@@ -1,0 +1,12 @@
+/*
+ * Shape tokens for the Astro components in src/components.
+ *
+ * Colour and type tokens are declared in the Tailwind entry
+ * (src/styles/global.css) because Tailwind 4 only generates utilities from
+ * `@theme` in the stylesheet the app imports. The tokens below are shape
+ * tokens, which every page inherits by importing this file.
+ */
+@theme {
+  --radius-pill: 9999px;
+  --shadow-raised: 0 1px 2px rgb(18 33 27 / 0.08), 0 8px 24px rgb(18 33 27 / 0.08);
+}
