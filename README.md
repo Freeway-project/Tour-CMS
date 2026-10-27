@@ -24,7 +24,7 @@ pnpm build
 
 ```
 apps/web         Astro 5 marketing site (static output, Tailwind 4)
-apps/studio      Sanity Studio v3
+apps/studio      Sanity Studio v4
 packages/schema  Sanity schema types, shared by the Studio and the site
 packages/ui      Shared Astro components and design tokens
 ```

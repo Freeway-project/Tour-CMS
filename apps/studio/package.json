@@ -12,11 +12,11 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@sanity/vision": "^3.99.0",
+    "@sanity/vision": "^4.22.1",
     "@tour-cms/schema": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sanity": "^3.99.0",
+    "sanity": "^4.22.1",
     "styled-components": "^6.6.0"
   },
   "devDependencies": {
