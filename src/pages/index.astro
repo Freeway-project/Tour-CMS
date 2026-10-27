@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content';
+
+import Button from '../components/Button.astro';
+import Base from '../layouts/Base.astro';
+import { getTours } from '../lib/db/catalog';
+import { formatCad } from '../lib/format';
+import '../styles/global.css';
+
+const siteEntry = (await getCollection('site'))[0];
+if (!siteEntry) throw new Error('src/content/site.json is missing');
+const site = siteEntry.data;
+
+const tours = await getTours();
+const adultPrices = tours.flatMap((tour) => tour.packages.map((pkg) => pkg.priceAdultCents));
+const fromPriceCents = adultPrices.length > 0 ? Math.min(...adultPrices) : null;
+const fromPrice = fromPriceCents === null ? null : formatCad(fromPriceCents);
+
+const heading = 'Niagara Falls Tours from Toronto';
+const description =
+  'Small-group day tours from Toronto to Niagara Falls. Hotel pickup, a local guide and skip-the-line access, running seven days a week.';
+---
+
+<Base title={`${heading} | ${site.name}`} description={description} siteName={site.name}>
+  <main class="mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center gap-6 px-6 py-24">
+    <p class="text-brand text-sm font-semibold tracking-widest uppercase">
+      Toronto → Niagara Falls
+    </p>
+    <h1 class="text-ink text-4xl font-bold tracking-tight text-balance sm:text-5xl">{heading}</h1>
+    <p class="text-ink/80 max-w-prose text-lg text-pretty">{description}</p>
+    {fromPrice ? (
+      <p class="text-ink/70 text-base">
+        From <span class="text-ink font-semibold">{fromPrice}</span> per adult
+      </p>
+    ) : null}
+    <div class="pt-2">
+      <Button href="#" variant="primary">
+        Book now
+      </Button>
+    </div>
+  </main>
+</Base>

@@ -1,10 +1,11 @@
 node_modules
 dist
 .astro
+.wrangler
 .env
 .env.*
 !.env.example
+.dev.vars
 .DS_Store
-.sanity
 coverage
 .lighthouseci

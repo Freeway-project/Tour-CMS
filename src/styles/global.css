@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/*
+ * Brand tokens live here so Tailwind generates the matching utilities
+ * (`bg-brand`, `text-ink`, `font-sans`, ...).
+ */
+@theme {
+  --color-brand: #0b5c3f;
+  --color-ink: #12211b;
+  --color-bg: #fbfaf7;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

@@ -1,0 +1,256 @@
+import { getFixtureDepartures, pickupLocations, tours } from '../../data/fixtures';
+import type {
+  Addon,
+  AddonPricing,
+  Departure,
+  DepartureStatus,
+  Package,
+  PickupLocation,
+  Tour,
+  TourStatus,
+} from '../types';
+import { supabase } from './client';
+
+/**
+ * Catalogue queries. Every function falls back to the fixtures in
+ * `src/data/fixtures.ts` when Supabase is not configured, so the marketing site
+ * builds with no `.env`.
+ *
+ * Database rows are snake_case; the rest of the app is camelCase. Mapping is
+ * kept in this file so no other module needs to know the column names.
+ */
+
+interface PackageRow {
+  id: string;
+  tour_id: string;
+  name: string;
+  description: string | null;
+  includes: string[] | null;
+  price_adult_cents: number;
+  price_child_cents: number | null;
+  price_senior_cents: number | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface AddonRow {
+  id: string;
+  tour_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  pricing: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface PickupLocationRow {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  pickup_note: string | null;
+  is_active: boolean;
+}
+
+interface TourPickupRow {
+  pickup_time: string;
+  pickup_locations: PickupLocationRow | null;
+}
+
+interface TourRow {
+  id: string;
+  slug: string;
+  title: string;
+  short_description: string;
+  description: string;
+  duration_minutes: number;
+  hero_image_path: string;
+  status: string;
+  is_private: boolean;
+  sort_order: number;
+  packages: PackageRow[] | null;
+  addons: AddonRow[] | null;
+  tour_pickups: TourPickupRow[] | null;
+}
+
+interface DepartureRow {
+  id: string;
+  tour_id: string;
+  starts_at: string;
+  capacity: number;
+  status: string;
+  seats_left: number;
+}
+
+const TOUR_SELECT = `
+  id,
+  slug,
+  title,
+  short_description,
+  description,
+  duration_minutes,
+  hero_image_path,
+  status,
+  is_private,
+  sort_order,
+  packages(id, tour_id, name, description, includes, price_adult_cents, price_child_cents, price_senior_cents, is_active, sort_order),
+  addons(id, tour_id, name, description, price_cents, pricing, is_active, sort_order),
+  tour_pickups(pickup_time, pickup_locations(id, name, address, lat, lng, pickup_note, is_active))
+`;
+
+function toAddonPricing(value: string): AddonPricing {
+  return value === 'per_booking' ? 'per_booking' : 'per_person';
+}
+
+function toTourStatus(value: string): TourStatus {
+  return value === 'seasonal' || value === 'hidden' ? value : 'active';
+}
+
+function toDepartureStatus(value: string): DepartureStatus {
+  return value === 'closed' || value === 'cancelled' ? value : 'open';
+}
+
+function mapPackage(row: PackageRow): Package {
+  return {
+    id: row.id,
+    tourId: row.tour_id,
+    name: row.name,
+    description: row.description,
+    includes: row.includes ?? [],
+    priceAdultCents: row.price_adult_cents,
+    priceChildCents: row.price_child_cents,
+    priceSeniorCents: row.price_senior_cents,
+    isActive: row.is_active,
+    sortOrder: row.sort_order,
+  };
+}
+
+function mapAddon(row: AddonRow): Addon {
+  return {
+    id: row.id,
+    tourId: row.tour_id,
+    name: row.name,
+    description: row.description,
+    priceCents: row.price_cents,
+    pricing: toAddonPricing(row.pricing),
+    isActive: row.is_active,
+    sortOrder: row.sort_order,
+  };
+}
+
+function mapPickupLocation(row: PickupLocationRow, time: string | null): PickupLocation {
+  return {
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    lat: row.lat,
+    lng: row.lng,
+    pickupNote: row.pickup_note,
+    isActive: row.is_active,
+    pickupTime: time,
+  };
+}
+
+function mapTour(row: TourRow): Tour {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    shortDescription: row.short_description,
+    description: row.description,
+    durationMinutes: row.duration_minutes,
+    heroImagePath: row.hero_image_path,
+    status: toTourStatus(row.status),
+    isPrivate: row.is_private,
+    sortOrder: row.sort_order,
+    packages: (row.packages ?? [])
+      .filter((pkg) => pkg.is_active)
+      .map(mapPackage)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
+    addons: (row.addons ?? []).map(mapAddon).sort((a, b) => a.sortOrder - b.sortOrder),
+    pickups: (row.tour_pickups ?? []).flatMap((entry) =>
+      entry.pickup_locations ? [mapPickupLocation(entry.pickup_locations, entry.pickup_time)] : [],
+    ),
+  };
+}
+
+function mapDeparture(row: DepartureRow): Departure {
+  return {
+    id: row.id,
+    tourId: row.tour_id,
+    startsAt: row.starts_at,
+    capacity: row.capacity,
+    status: toDepartureStatus(row.status),
+    seatsLeft: row.seats_left,
+  };
+}
+
+export async function getTours(): Promise<Tour[]> {
+  if (!supabase) {
+    return [...tours].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  const { data, error } = await supabase
+    .from('tours')
+    .select(TOUR_SELECT)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw new Error(`Failed to load tours: ${error.message}`);
+
+  return (data as unknown as TourRow[]).map(mapTour);
+}
+
+export async function getTourBySlug(slug: string): Promise<Tour | undefined> {
+  if (!supabase) {
+    return tours.find((tour) => tour.slug === slug);
+  }
+
+  const { data, error } = await supabase
+    .from('tours')
+    .select(TOUR_SELECT)
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to load tour "${slug}": ${error.message}`);
+
+  return data ? mapTour(data as unknown as TourRow) : undefined;
+}
+
+export async function getDepartures(
+  tourId: string,
+  from: Date | string,
+  to: Date | string,
+): Promise<Departure[]> {
+  const fromIso = new Date(from).toISOString();
+  const toIso = new Date(to).toISOString();
+  const fromTime = Date.parse(fromIso);
+  const toTime = Date.parse(toIso);
+
+  if (!supabase) {
+    return getFixtureDepartures()
+      .filter((departure) => {
+        const startsAt = Date.parse(departure.startsAt);
+        return departure.tourId === tourId && startsAt >= fromTime && startsAt <= toTime;
+      })
+      .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  }
+
+  const { data, error } = await supabase
+    .from('departure_availability')
+    .select('id, tour_id, starts_at, capacity, status, seats_left')
+    .eq('tour_id', tourId)
+    .gte('starts_at', fromIso)
+    .lte('starts_at', toIso)
+    .order('starts_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to load departures: ${error.message}`);
+
+  return (data as unknown as DepartureRow[]).map(mapDeparture);
+}
+
+/** Pickup points shared by every tour, used by pages that have no tour yet. */
+export function getPickupLocations(): PickupLocation[] {
+  return pickupLocations;
+}
