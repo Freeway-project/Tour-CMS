@@ -1,0 +1,28 @@
+{
+  "name": "@tour-cms/studio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "sanity dev",
+    "build": "sanity build",
+    "start": "sanity start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@sanity/vision": "^3.99.0",
+    "@tour-cms/schema": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sanity": "^3.99.0",
+    "styled-components": "^6.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}

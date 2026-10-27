@@ -1,0 +1,14 @@
+{
+  "name": "@tour-cms/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./Button.astro": "./src/Button.astro",
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  }
+}
