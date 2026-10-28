@@ -23,7 +23,8 @@ The owner must be able to change tours, packages, prices and dates, and see book
 8. **Secrets:** `SUPABASE_SERVICE_ROLE_KEY` and any other secret is server-only (declared with `astro:env` as `context: "server", access: "secret"`). Never import it into client code. Use `.env` (gitignored) and keep `.env.example` up to date.
 9. Every Supabase table has **RLS enabled**. The anonymous role can only read public catalogue data. Bookings are never readable or writable by anon directly.
 10. Keep changes scoped to the task. Don't reformat unrelated files or add dependencies the task didn't ask for.
-11. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
+11. **No business data in code.** Anything a customer reads about the business (tour names, prices, inclusions, times, pickup points, phone numbers, policies, FAQs, reviews) comes from Supabase so the owner can change it in `/admin`. Code holds layout and the fallback fixtures in `src/data/fixtures.ts` only.
+12. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
 
 ## Commands (must all pass before a task is done)
 ```
