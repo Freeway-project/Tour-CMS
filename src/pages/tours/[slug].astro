@@ -1,0 +1,318 @@
+---
+export const prerender = true;
+
+import { getCollection } from 'astro:content';
+
+import BookingWidget from '../../components/booking/BookingWidget.astro';
+import InquiryForm from '../../components/booking/InquiryForm.astro';
+import Button from '../../components/Button.astro';
+import Base from '../../layouts/Base.astro';
+import { getTours } from '../../lib/db/catalog';
+import { formatCad, formatCadHeadline } from '../../lib/format';
+import { renderMarkdown } from '../../lib/markdown';
+import { fromPrice } from '../../lib/pricing';
+import type { Tour } from '../../lib/types';
+import '../../styles/global.css';
+
+export async function getStaticPaths() {
+  const tours = await getTours();
+
+  return tours
+    .filter((tour) => tour.status !== 'hidden')
+    .map((tour) => ({ params: { slug: tour.slug }, props: { tour } }));
+}
+
+interface Props {
+  tour: Tour;
+}
+
+const { tour } = Astro.props;
+
+const siteEntry = (await getCollection('site'))[0];
+if (!siteEntry) throw new Error('src/content/site.json is missing');
+const site = siteEntry.data;
+
+const allReviews = await getCollection('reviews');
+const reviews = allReviews
+  .filter((entry) => entry.data.featured)
+  .sort((a, b) => b.data.date.localeCompare(a.data.date))
+  .slice(0, 3);
+
+const faqs = await getCollection('faqs');
+
+const activePackages = tour.packages.filter((pkg) => pkg.isActive);
+const pickups = tour.pickups.filter((pickup) => pickup.isActive);
+const lowest = fromPrice(tour);
+
+const ratedPlatforms = site.ratings.filter((rating) => rating.count > 0);
+const totalReviews = ratedPlatforms.reduce((sum, rating) => sum + rating.count, 0);
+const averageRating =
+  totalReviews > 0
+    ? ratedPlatforms.reduce((sum, rating) => sum + rating.score * rating.count, 0) / totalReviews
+    : site.ratings.length > 0
+      ? site.ratings.reduce((sum, rating) => sum + rating.score, 0) / site.ratings.length
+      : null;
+const firstPlatform = site.ratings[0];
+
+// Google rejects an `AggregateRating` with `reviewCount: 0`, so prefer the platform
+// totals once the owner has filled them in and otherwise fall back to the guest
+// reviews published on this site.
+const structuredRating =
+  totalReviews > 0 && averageRating !== null
+    ? { ratingValue: averageRating, reviewCount: totalReviews }
+    : allReviews.length > 0
+      ? {
+          ratingValue:
+            allReviews.reduce((sum, entry) => sum + entry.data.rating, 0) / allReviews.length,
+          reviewCount: allReviews.length,
+        }
+      : null;
+
+const ratingSummary =
+  totalReviews > 0 && averageRating !== null
+    ? `${averageRating.toFixed(1)} average from ${totalReviews.toLocaleString('en-CA')} guest reviews`
+    : firstPlatform
+      ? `Rated ${firstPlatform.score} on ${firstPlatform.platform}`
+      : null;
+
+const hours = Math.floor(tour.durationMinutes / 60);
+const minutes = tour.durationMinutes % 60;
+const duration =
+  hours === 0
+    ? `${minutes} minutes`
+    : minutes === 0
+      ? `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+      : `${hours} ${hours === 1 ? 'hour' : 'hours'} ${minutes} minutes`;
+
+const description = tour.shortDescription.slice(0, 158);
+const title = `${tour.title} | ${site.name}`;
+const canonicalUrl = new URL(
+  Astro.url.pathname,
+  Astro.site ?? new URL('https://torontoniagara.ca'),
+);
+
+const productLd: Record<string, unknown> = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: tour.title,
+  description: tour.shortDescription,
+  url: canonicalUrl.href,
+};
+
+if (lowest) {
+  productLd.offers = {
+    '@type': 'Offer',
+    price: (lowest.cents / 100).toFixed(2),
+    priceCurrency: 'CAD',
+    availability: 'https://schema.org/InStock',
+    url: canonicalUrl.href,
+  };
+}
+
+if (structuredRating) {
+  productLd.aggregateRating = {
+    '@type': 'AggregateRating',
+    ratingValue: structuredRating.ratingValue.toFixed(1),
+    reviewCount: structuredRating.reviewCount,
+  };
+}
+
+const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
+---
+
+<Base title={title} description={description} siteName={site.name}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={productLdJson} />
+  </Fragment>
+
+  <main class="mx-auto w-full max-w-3xl px-5 pt-8 pb-32 sm:px-6 lg:pb-16">
+    <a href="/" class="text-sm font-medium text-brand hover:underline">
+      ← All tours
+    </a>
+
+    <header class="mt-8">
+      <p class="text-sm font-semibold tracking-widest text-brand uppercase">
+        Toronto → Niagara Falls
+      </p>
+      <h1 class="mt-2 text-4xl font-bold tracking-tight text-ink text-balance sm:text-5xl">
+        {tour.title}
+      </h1>
+      <p class="mt-4 max-w-prose text-lg text-ink/80 text-pretty">{tour.shortDescription}</p>
+
+      <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink/70">
+        <span>{duration}</span>
+        {ratingSummary ? <span>{ratingSummary}</span> : null}
+        {lowest ? (
+          <span>
+            From <strong class="font-semibold text-ink">{formatCadHeadline(lowest.cents)}</strong>
+            {lowest.unit === 'person' ? ' per person' : ' per vehicle'}
+          </span>
+        ) : null}
+      </div>
+
+      <div class="mt-6">
+        <Button href="#book" variant="primary">
+          Check dates &amp; book
+        </Button>
+      </div>
+    </header>
+
+    <section class="mt-12" aria-labelledby="packages-heading">
+      <h2 id="packages-heading" class="text-2xl font-bold tracking-tight text-ink">
+        Packages
+      </h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        {activePackages.map((pkg) => (
+          <article class="rounded-2xl border border-ink/10 bg-white p-5">
+            <h3 class="text-lg font-semibold text-ink">{pkg.name}</h3>
+            {pkg.description ? <p class="mt-1 text-sm text-ink/70">{pkg.description}</p> : null}
+
+            {pkg.pricingMode === 'per_group' ? (
+              <p class="mt-3 text-ink">
+                <span class="text-xl font-semibold">{formatCad(pkg.priceAdultCents)}</span>
+                <span class="text-sm text-ink/70"> per vehicle, up to {pkg.maxPax} people</span>
+              </p>
+            ) : (
+              <dl class="mt-3 grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <dt class="text-ink/70">Adult</dt>
+                  <dd class="font-semibold text-ink">{formatCad(pkg.priceAdultCents)}</dd>
+                </div>
+                <div>
+                  <dt class="text-ink/70">Child</dt>
+                  <dd class="font-semibold text-ink">
+                    {formatCad(pkg.priceChildCents ?? pkg.priceAdultCents)}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-ink/70">Senior</dt>
+                  <dd class="font-semibold text-ink">
+                    {formatCad(pkg.priceSeniorCents ?? pkg.priceAdultCents)}
+                  </dd>
+                </div>
+              </dl>
+            )}
+
+            {pkg.includes.length > 0 ? (
+              <ul class="mt-4 space-y-1.5 text-sm text-ink/80">
+                {pkg.includes.map((item) => (
+                  <li class="flex gap-2">
+                    <span aria-hidden="true" class="text-brand">
+                      ✓
+                    </span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="mt-12" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="text-2xl font-bold tracking-tight text-ink">
+        About this tour
+      </h2>
+      <div
+        class="mt-4 space-y-4 text-ink/80 [&_a]:font-medium [&_a]:text-brand [&_a]:underline"
+        set:html={renderMarkdown(tour.description)}
+      />
+    </section>
+
+    <section class="mt-12" aria-labelledby="pickup-heading">
+      <h2 id="pickup-heading" class="text-2xl font-bold tracking-tight text-ink">
+        Pickup
+      </h2>
+      {pickups.length > 0 ? (
+        <ul class="mt-4 space-y-3">
+          {pickups.map((pickup) => (
+            <li class="rounded-xl border border-ink/10 bg-white p-4">
+              <p class="font-semibold text-ink">{pickup.name}</p>
+              <p class="mt-1 text-sm text-ink/70">{pickup.address}</p>
+              {pickup.pickupTime ? (
+                <p class="mt-2 text-sm text-ink/80">Pickup at {pickup.pickupTime}</p>
+              ) : null}
+              {pickup.pickupNote ? (
+                <p class="mt-1 text-sm text-ink/70">{pickup.pickupNote}</p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="mt-4 text-ink/80">Pickup details are confirmed when you book.</p>
+      )}
+    </section>
+
+    <div class="mt-12">
+      {tour.isPrivate ? <InquiryForm tour={tour} /> : <BookingWidget tour={tour} />}
+    </div>
+
+    {reviews.length > 0 ? (
+      <section class="mt-12" aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading" class="text-2xl font-bold tracking-tight text-ink">
+          What guests say
+        </h2>
+        <ul class="mt-4 grid gap-4 sm:grid-cols-2">
+          {reviews.map((review) => (
+            <li class="rounded-2xl border border-ink/10 bg-white p-5">
+              <p class="text-sm font-semibold text-ink">
+                <span aria-hidden="true">{'★'.repeat(review.data.rating)}</span>
+                <span class="sr-only">{review.data.rating} out of 5</span>
+              </p>
+              <blockquote class="mt-2 text-sm text-ink/80">{review.data.text}</blockquote>
+              <p class="mt-3 text-xs text-ink/70">
+                {review.data.author}
+                {review.data.location ? `, ${review.data.location}` : ''}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : null}
+
+    {faqs.length > 0 ? (
+      <section class="mt-12" aria-labelledby="faq-heading">
+        <h2 id="faq-heading" class="text-2xl font-bold tracking-tight text-ink">
+          Frequently asked questions
+        </h2>
+        <div class="mt-4 space-y-2">
+          {faqs.map((faq) => (
+            <details class="rounded-xl border border-ink/10 bg-white p-4">
+              <summary class="cursor-pointer font-medium text-ink">{faq.data.question}</summary>
+              <div
+                class="mt-2 space-y-3 text-sm text-ink/80"
+                set:html={renderMarkdown(faq.data.answer)}
+              />
+            </details>
+          ))}
+        </div>
+      </section>
+    ) : null}
+  </main>
+
+  <div
+    class="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 lg:hidden"
+    style="padding-bottom: env(safe-area-inset-bottom)"
+  >
+    <div class="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-5 py-3">
+      {lowest ? (
+        <p class="text-sm text-ink/70">
+          From{' '}
+          <strong class="text-base font-semibold text-ink">
+            {formatCadHeadline(lowest.cents)}
+          </strong>
+          {lowest.unit === 'person' ? ' per person' : ' per vehicle'}
+        </p>
+      ) : (
+        <span></span>
+      )}
+      <a
+        href="#book"
+        class="rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg shadow-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      >
+        Book now
+      </a>
+    </div>
+  </div>
+</Base>

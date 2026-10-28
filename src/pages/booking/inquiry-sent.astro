@@ -1,0 +1,31 @@
+---
+export const prerender = true;
+
+import Base from '../../layouts/Base.astro';
+import '../../styles/global.css';
+---
+
+<Base
+  title="Inquiry sent | Toronto Niagara Tours"
+  description="Your private Niagara Falls tour inquiry has been sent."
+>
+  <main class="mx-auto w-full max-w-xl px-5 py-16 sm:px-6">
+    <a href="/" class="text-sm font-medium text-brand hover:underline">
+      ← Back to tours
+    </a>
+
+    <div class="mt-8">
+      <p class="text-sm font-semibold tracking-widest text-brand uppercase">Inquiry sent</p>
+      <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">Thanks — we have your request</h1>
+      <p class="mt-3 text-ink/80">
+        We will reply by email to confirm the vehicle, date and pickup for your private tour. No
+        payment has been taken.
+      </p>
+      <p class="mt-6">
+        <a href="/" class="font-medium text-brand hover:underline">
+          See all tours
+        </a>
+      </p>
+    </div>
+  </main>
+</Base>

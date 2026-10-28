@@ -83,6 +83,14 @@ export interface Departure {
   seatsLeft: number;
 }
 
+/** One bookable departure as returned by `/api/availability`. */
+export interface AvailabilitySlot {
+  departureId: string;
+  /** ISO 8601 timestamptz. */
+  startsAt: string;
+  seatsLeft: number;
+}
+
 export interface QuoteLine {
   label: string;
   quantity: number;
