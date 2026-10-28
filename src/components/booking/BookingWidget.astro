@@ -1,6 +1,4 @@
 ---
-import { actions } from 'astro:actions';
-
 import { formatCad } from '../../lib/format';
 import { quote } from '../../lib/pricing';
 import type { Tour } from '../../lib/types';
@@ -48,7 +46,8 @@ const legendClass = 'text-base font-semibold text-ink';
   ) : (
     <>
       <script type="application/json" id="booking-data" set:html={widgetJson} />
-      <form id="booking-form" method="POST" action={actions.reserveBooking} class="mt-6 space-y-8">
+      <form id="booking-form" method="POST" action="/booking/reserve" class="mt-6 space-y-8">
+        <input type="hidden" name="tourSlug" value={tour.slug} />
         <fieldset>
           <legend class={legendClass}>Package</legend>
           <div class="mt-3 grid gap-3">
@@ -340,6 +339,7 @@ const legendClass = 'text-base font-semibold text-ink';
 <script>
   import { actions, isInputError, type ActionError } from 'astro:actions';
 
+  import { messageForCode, readErrorCode } from '../../lib/booking-errors';
   import { formatCad } from '../../lib/format';
   import { quote } from '../../lib/pricing';
   import type { Addon, AvailabilitySlot, Package, PickupLocation } from '../../lib/types';
@@ -799,7 +799,19 @@ const legendClass = 'text-base font-semibold text-ink';
     update();
   }
 
+  // A submit that bypassed this script comes back with `?error=<code>`: show
+  // the same friendly text the action would have shown.
+  function showQueryError(): void {
+    const errorBox = document.getElementById('booking-error');
+    const code = readErrorCode(window.location.search);
+    if (!errorBox || !code) return;
+
+    errorBox.textContent = messageForCode(code);
+    errorBox.classList.remove('hidden');
+  }
+
   const data = readWidgetData();
   const form = document.querySelector<HTMLFormElement>('#booking-form');
   if (data && form) init(form, data);
+  showQueryError();
 </script>

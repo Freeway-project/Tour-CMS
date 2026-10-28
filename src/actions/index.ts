@@ -1,5 +1,6 @@
 import { ActionError, defineAction } from 'astro:actions';
 
+import { messageForDbError } from '../lib/booking-errors';
 import { getAdminClient } from '../lib/db/admin';
 import { bookingSchema, inquirySchema } from './schemas';
 
@@ -21,40 +22,6 @@ interface InquiryPackageRow {
   pricing_mode: string;
   max_pax: number | null;
   is_active: boolean;
-}
-
-function messageForDbError(error: { message: string }): string {
-  const message = error.message;
-
-  if (message.includes('not_enough_seats')) {
-    return 'There are not enough seats left for that date. Please choose another departure.';
-  }
-
-  if (
-    message.includes('departure_not_found') ||
-    message.includes('departure_not_open') ||
-    message.includes('departure_in_past')
-  ) {
-    return 'That departure is no longer available. Please choose another date.';
-  }
-
-  if (message.includes('package_not_available')) {
-    return 'That package is no longer available. Please refresh the page and try again.';
-  }
-
-  if (message.includes('addon_not_available') || message.includes('invalid_addons')) {
-    return 'One of those extras is no longer available. Please refresh the page and try again.';
-  }
-
-  if (message.includes('invalid_passenger_counts')) {
-    return 'Please choose at least one person.';
-  }
-
-  if (message.includes('private_tour_inquiry_only')) {
-    return 'Private tours are booked by inquiry. Please send us an inquiry instead.';
-  }
-
-  return 'We could not reserve your seats. Please try again, or call us and we will help.';
 }
 
 export const server = {
