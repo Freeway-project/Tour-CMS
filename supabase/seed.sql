@@ -1,6 +1,9 @@
 -- Seed data for local development, PGlite tests and a fresh Supabase project.
 -- Prices are integer cents (CAD). UUIDs are fixed so tests and fixtures can
 -- reference them directly.
+--
+-- The catalogue is the client's winter offer: one shared day tour and one
+-- private tour that is priced per vehicle.
 
 -- ---------------------------------------------------------------------------
 -- Tours
@@ -14,11 +17,13 @@ insert into public.tours (
     '0a000000-0000-4000-8000-000000000001',
     'niagara-falls-day-tour',
     'Niagara Falls Day Tour from Toronto',
-    'A full day at Niagara Falls with a Hornblower cruise, a local guide and round-trip pickup from downtown Toronto.',
-    'We pick you up in downtown Toronto in the morning and drive straight to the Canadian side of Niagara Falls. Your guide handles the tickets, the timing and the best viewpoints.
+    'A full day at Niagara Falls from downtown Toronto, with a free maple syrup tasting, the Floral Clock, Whirlpool Rapids and the Niagara Parks Power Station.',
+    'We meet at 55 York St in downtown Toronto in the morning and drive to the Canadian side of Niagara Falls. The day starts with a free Canadian maple syrup tasting, then we stop at the Floral Clock, the Whirlpool Rapids and the Niagara Parks Power Station, a historic hydro power station.
 
-The Hornblower cruise takes you to the base of Horseshoe Falls — expect to get wet. After lunch there is free time at Table Rock, a scenic drive along the Niagara Parkway and a short stop in Niagara-on-the-Lake before we head back to the city.',
-    600,
+We take the scenic Niagara Parkway and stop at beautiful spots for photos along the way, so there is time to enjoy the falls instead of rushing past them.
+
+Want to add an attraction such as the boat cruise or Journey Behind the Falls? Buy it on the day. We''ll help you get your tickets.',
+    600, -- TODO confirm with client
     '/images/placeholder-niagara-hero.jpg',
     'active',
     false,
@@ -26,109 +31,86 @@ The Hornblower cruise takes you to the base of Horseshoe Falls — expect to get
   ),
   (
     '0a000000-0000-4000-8000-000000000002',
-    'niagara-falls-evening-fireworks',
-    'Niagara Falls Evening Tour with Fireworks',
-    'See the falls light up after dark, then watch the summer fireworks from the best spot on the Canadian side.',
-    'This evening trip leaves Toronto in the late afternoon and arrives at Niagara Falls just as the lights come on. Your guide takes you to the best viewpoints for the illuminated falls, then settles in for the fireworks display over the gorge.
+    'private-niagara-falls-tour',
+    'Private Niagara Falls Tour',
+    'A private day at Niagara Falls from downtown Toronto, priced per vehicle. Your group sets the pace.',
+    'The same Niagara Falls day, with the vehicle to yourselves. Your group sets the pace: a free Canadian maple syrup tasting, the Floral Clock, the Whirlpool Rapids and the Niagara Parks Power Station, a historic hydro power station, then sightseeing along the Niagara Parkway with stops at beautiful spots for photos.
 
-There is time for dinner on your own near Table Rock before the show. The tour runs on fireworks nights from May to October and returns to Toronto around 11:00 PM.',
-    420,
-    '/images/placeholder-fireworks-hero.jpg',
-    'seasonal',
-    false,
-    2
-  ),
-  (
-    '0a000000-0000-4000-8000-000000000003',
-    'niagara-wine-country-tour',
-    'Niagara-on-the-Lake Wine Country Tour',
-    'Taste your way through Niagara-on-the-Lake with three winery visits, a vineyard lunch and a guided walk through town.',
-    'The Niagara Peninsula is one of Canada’s best wine regions, and this small-group tour introduces you to three very different wineries. Tastings are included at each stop, from crisp Rieslings to the region’s famous icewine.
+The price is per vehicle, not per person. Choose the van that fits your group.
 
-Between tastings there is time for lunch overlooking the vines and a guided walk through the shops and gardens of Niagara-on-the-Lake. This tour is for adults 19 and over.',
-    480,
-    '/images/placeholder-wine-hero.jpg',
+Want to add an attraction such as the boat cruise or Journey Behind the Falls? Buy it on the day. We''ll help you get your tickets.',
+    600, -- TODO confirm with client
+    '/images/placeholder-private-tour-hero.jpg',
     'active',
-    false,
-    3
+    true,
+    2
   );
 
 -- ---------------------------------------------------------------------------
 -- Packages
 -- ---------------------------------------------------------------------------
 
+-- Attraction tickets are not included and there are no child or senior rates:
+-- a null price falls back to the adult price.
 insert into public.packages (
   id, tour_id, name, description, includes,
-  price_adult_cents, price_child_cents, price_senior_cents, is_active, sort_order
+  price_adult_cents, price_child_cents, price_senior_cents,
+  pricing_mode, max_pax, is_active, sort_order
 ) values
   (
     '0b000000-0000-4000-8000-000000000001',
     '0a000000-0000-4000-8000-000000000001',
-    'Bus only',
-    'Round-trip transport from Toronto with free time at the falls.',
-    array['Round-trip transport', 'Local guide', 'Free time at Table Rock'],
-    9900, 7920, null, true, 1
+    'Day tour',
+    'One price per person for the full day out, including every stop listed.',
+    array[
+      'Free Canadian maple syrup tasting',
+      'Floral Clock',
+      'Whirlpool Rapids',
+      'Niagara Parks Power Station (historic hydro power station)',
+      'Sightseeing along the Niagara Parkway',
+      'Stops at beautiful spots for photos'
+    ],
+    9900, null, null,
+    'per_person', null, true, 1
   ),
   (
     '0b000000-0000-4000-8000-000000000002',
-    '0a000000-0000-4000-8000-000000000001',
-    '+ Boat cruise',
-    'The bus tour plus a Hornblower cruise to the base of Horseshoe Falls.',
-    array['Round-trip transport', 'Local guide', 'Hornblower cruise ticket'],
-    15900, 12720, null, true, 2
+    '0a000000-0000-4000-8000-000000000002',
+    'Sprinter van, up to 6 people',
+    'The private tour for groups of up to 6 people, at a flat price for the vehicle.',
+    array[
+      'Free Canadian maple syrup tasting',
+      'Floral Clock',
+      'Whirlpool Rapids',
+      'Niagara Parks Power Station (historic hydro power station)',
+      'Sightseeing along the Niagara Parkway',
+      'Stops at beautiful spots for photos'
+    ],
+    69900, null, null,
+    'per_group', 6, true, 1
   ),
   (
     '0b000000-0000-4000-8000-000000000003',
-    '0a000000-0000-4000-8000-000000000001',
-    '+ Boat & Journey Behind the Falls',
-    'Both boat and tunnel experiences, with a poncho for each.',
-    array['Round-trip transport', 'Local guide', 'Hornblower cruise ticket', 'Journey Behind the Falls ticket'],
-    20900, 16720, null, true, 3
-  ),
-  (
-    '0b000000-0000-4000-8000-000000000004',
     '0a000000-0000-4000-8000-000000000002',
-    'Evening tour',
-    'Evening transport, guide and a reserved fireworks viewing spot.',
-    array['Round-trip transport', 'Local guide', 'Fireworks viewing spot'],
-    15900, 12900, null, true, 1
-  ),
-  (
-    '0b000000-0000-4000-8000-000000000005',
-    '0a000000-0000-4000-8000-000000000003',
-    'Wine country tour',
-    'Three tastings, a vineyard lunch and a guided walk in town.',
-    array['Round-trip transport', 'Three wine tastings', 'Vineyard lunch'],
-    18900, null, null, true, 1
+    'Mercedes-Benz Sprinter, up to 11 people',
+    'The private tour for groups of up to 11 people, at a flat price for the vehicle.',
+    array[
+      'Free Canadian maple syrup tasting',
+      'Floral Clock',
+      'Whirlpool Rapids',
+      'Niagara Parks Power Station (historic hydro power station)',
+      'Sightseeing along the Niagara Parkway',
+      'Stops at beautiful spots for photos'
+    ],
+    99900, null, null,
+    'per_group', 11, true, 2
   );
 
 -- ---------------------------------------------------------------------------
 -- Add-ons
 -- ---------------------------------------------------------------------------
 
-insert into public.addons (
-  id, tour_id, name, description, price_cents, pricing, is_active, sort_order
-) values
-  (
-    '0c000000-0000-4000-8000-000000000001',
-    '0a000000-0000-4000-8000-000000000001',
-    'Lunch at Table Rock',
-    'A set lunch at the Table Rock market, paid when you book.',
-    2500,
-    'per_person',
-    true,
-    1
-  ),
-  (
-    '0c000000-0000-4000-8000-000000000002',
-    '0a000000-0000-4000-8000-000000000001',
-    'Airport drop-off',
-    'Drop-off at Toronto Pearson at the end of the day, per booking.',
-    6000,
-    'per_booking',
-    true,
-    2
-  );
+-- The `addons` table stays for future extras, but the winter offer has none.
 
 -- ---------------------------------------------------------------------------
 -- Pickup locations
@@ -137,38 +119,11 @@ insert into public.addons (
 insert into public.pickup_locations (id, name, address, lat, lng, pickup_note, is_active) values
   (
     '0d000000-0000-4000-8000-000000000001',
-    'Union Station – Front St entrance',
-    '65 Front Street West, Toronto, ON M5J 1E6',
-    43.6453,
-    -79.3806,
-    'Wait by the taxi stand on Front Street, under the station clock.',
-    true
-  ),
-  (
-    '0d000000-0000-4000-8000-000000000002',
-    'Chelsea Hotel, Toronto',
-    '33 Gerrard Street West, Toronto, ON M5G 1Z4',
-    43.6602,
-    -79.3835,
-    'Meet the bus at the main entrance on Gerrard Street.',
-    true
-  ),
-  (
-    '0d000000-0000-4000-8000-000000000003',
-    'Fairmont Royal York',
-    '100 Front Street West, Toronto, ON M5J 1E3',
-    43.6457,
-    -79.3815,
-    'Use the Front Street entrance, opposite Union Station.',
-    true
-  ),
-  (
-    '0d000000-0000-4000-8000-000000000004',
-    'North York Centre – Yonge St',
-    '5150 Yonge Street, Toronto, ON M2N 6L8',
-    43.7695,
-    -79.4131,
-    'Meet outside the library entrance, north of Mel Lastman Square.',
+    '55 York St, downtown Toronto',
+    '55 York St, Toronto, ON M5J 1R7',
+    43.6455,
+    -79.3825,
+    null,
     true
   );
 
@@ -177,26 +132,19 @@ insert into public.pickup_locations (id, name, address, lat, lng, pickup_note, i
 -- ---------------------------------------------------------------------------
 
 insert into public.tour_pickups (tour_id, pickup_location_id, pickup_time) values
-  ('0a000000-0000-4000-8000-000000000001', '0d000000-0000-4000-8000-000000000001', '07:15'),
-  ('0a000000-0000-4000-8000-000000000001', '0d000000-0000-4000-8000-000000000002', '07:25'),
-  ('0a000000-0000-4000-8000-000000000001', '0d000000-0000-4000-8000-000000000003', '07:30'),
-  ('0a000000-0000-4000-8000-000000000001', '0d000000-0000-4000-8000-000000000004', '08:00'),
-  ('0a000000-0000-4000-8000-000000000002', '0d000000-0000-4000-8000-000000000001', '16:00'),
-  ('0a000000-0000-4000-8000-000000000002', '0d000000-0000-4000-8000-000000000002', '16:15'),
-  ('0a000000-0000-4000-8000-000000000002', '0d000000-0000-4000-8000-000000000003', '16:10'),
-  ('0a000000-0000-4000-8000-000000000003', '0d000000-0000-4000-8000-000000000001', '09:00'),
-  ('0a000000-0000-4000-8000-000000000003', '0d000000-0000-4000-8000-000000000002', '09:10'),
-  ('0a000000-0000-4000-8000-000000000003', '0d000000-0000-4000-8000-000000000003', '09:05');
+  ('0a000000-0000-4000-8000-000000000001', '0d000000-0000-4000-8000-000000000001', '07:45'), -- TODO confirm
+  ('0a000000-0000-4000-8000-000000000002', '0d000000-0000-4000-8000-000000000001', '07:45'); -- TODO confirm
 
 -- ---------------------------------------------------------------------------
--- Departures: the next 30 days, 08:00 Toronto time, capacity 7
+-- Departures: the next 30 days, 08:00 Toronto time, capacity 11
 -- ---------------------------------------------------------------------------
 
+-- Private tours are requested through the inquiry form, so only the shared day
+-- tour gets scheduled departures.
 insert into public.departures (tour_id, starts_at, capacity, status)
 select
-  t.id,
+  '0a000000-0000-4000-8000-000000000001',
   ((current_date + n)::date + time '08:00') at time zone 'America/Toronto',
-  7,
+  11, -- TODO confirm
   'open'
-from public.tours t
-cross join generate_series(1, 30) as n;
+from generate_series(1, 30) as n;

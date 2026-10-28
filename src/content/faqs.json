@@ -2,13 +2,13 @@
   {
     "id": "weather",
     "question": "What happens if it rains?",
-    "answer": "We run in the rain, snow and shine — the bus is heated and the falls are just as impressive in bad weather. The only exception is a severe weather warning from Environment Canada, in which case we reschedule you for free or refund you in full.\n\nBring a light rain jacket if the forecast looks wet. Ponchos are handed out before the boat cruise.",
+    "answer": "We run in the rain, snow and shine — the vehicle is heated and the falls are just as impressive in bad weather. The only exception is a severe weather warning from Environment Canada, in which case we reschedule you for free or refund you in full.\n\nBring a light rain jacket if the forecast looks wet.",
     "tags": ["weather", "boat", "what-to-bring"]
   },
   {
     "id": "boat-season",
     "question": "When does the boat cruise run?",
-    "answer": "The Hornblower cruise usually runs from early May to late November. In the winter months we replace it with Journey Behind the Falls, the tunnels and viewing platforms at the base of Horseshoe Falls.\n\nIf you book a package that includes the cruise outside the season, we swap the ticket automatically and refund the difference.",
+    "answer": "The boat cruise usually runs from early May to late November. Attraction tickets are not included in our price, so you add them on the day — and in the winter months Journey Behind the Falls is the better option. We'll help you get your tickets either way.",
     "tags": ["boat", "season", "winter"]
   },
   {
@@ -20,13 +20,13 @@
   {
     "id": "children",
     "question": "Is the tour suitable for children?",
-    "answer": "Yes. Children aged 3–12 travel at a reduced rate and children under 3 travel free on a parent's lap. The day tour works well for families: there is free time at Table Rock and the boat ride is short enough for most kids.\n\nThe wine country tour is adults only (19+).",
+    "answer": "Yes. Children are welcome. Child and senior prices are not set for this season, so everyone pays the same price.\n\nPrivate tours are a good choice for larger families: the whole vehicle is yours for the day.",
     "tags": ["family", "children", "pricing"]
   },
   {
     "id": "accessibility",
     "question": "Do you accommodate wheelchairs and strollers?",
-    "answer": "Our buses have space for one folding wheelchair or two strollers, but please tell us when you book so we can keep it free. The Table Rock centre and the boat are wheelchair accessible. Some viewpoints along the Niagara Parkway are gravel, so a companion is helpful.",
+    "answer": "Our vans have space for one folding wheelchair or two strollers, but please tell us when you book so we can keep it free. The Table Rock centre and the boat are wheelchair accessible. Some viewpoints along the Niagara Parkway are gravel, so a companion is helpful.",
     "tags": ["accessibility"]
   },
   {
@@ -44,7 +44,7 @@
   {
     "id": "pickup",
     "question": "Where do you pick up?",
-    "answer": "We pick up from Union Station, the Chelsea Hotel, the Fairmont Royal York and North York Centre. Choose the closest point when you book and arrive five minutes early — the bus cannot wait past its slot.\n\nMost downtown hotels are within a short walk of one of these stops.",
+    "answer": "We pick up at 55 York St in downtown Toronto, a short walk from Union Station. Arrive five minutes early — the vehicle cannot wait past its slot.",
     "tags": ["pickup", "logistics"]
   }
 ]

@@ -1,6 +1,6 @@
 # Task 04 — Tour page + booking flow (reserve seats, no payment yet)
 
-Read `AGENTS.md` first and follow it. Builds on task 03 (single Astro app, Supabase schema, `reserve_booking`, `pricing.ts`, fixtures fallback).
+Read `AGENTS.md` first and follow it. Builds on tasks 03 and 04a (single Astro app, Supabase schema, `reserve_booking`, `pricing.ts` with per-group pricing, real client tours, fixtures fallback).
 
 ## Goal
 A customer can open a tour page, pick a package, date, people, add-ons and pickup, see the live price with HST, enter their details and reserve seats. Payment comes in task 05, so for now a successful reservation goes straight to a confirmation page.
@@ -34,8 +34,9 @@ A customer can open a tour page, pick a package, date, people, add-ons and picku
 - `src/pages/booking/confirmed.astro` (`prerender = false`): look up the booking by `ref` with the admin client and show the reference, tour, date and time in Toronto time, people, pickup and total. Unknown ref → friendly 404 message. Never show other customers' data. Only look up by exact reference.
 
 ## 4. Private tour inquiry
-- `src/components/booking/InquiryForm.astro`: preferred date, group size (1–20), name, email, phone, message.
-- Action `createInquiry` → insert into `inquiries` with the admin client → redirect to `/booking/inquiry-sent`.
+- `src/components/booking/InquiryForm.astro`: vehicle (radio cards from the tour's `per_group` packages showing "$699 · up to 6 people", plus HST), preferred date, group size (1 to the chosen vehicle's `maxPax`), name, email, phone, message. Show the quote for the chosen vehicle with `quote()`.
+- The packages section on a private tour page shows "per vehicle, up to N people" instead of adult/child/senior prices.
+- Action `createInquiry` (validate `packageId` is a uuid and group size ≤ that package's `maxPax`) → insert into `inquiries` with `package_id` with the admin client → redirect to `/booking/inquiry-sent`.
 
 ## 5. Spam and abuse basics
 - Hidden honeypot field on both forms (reject silently if filled).
