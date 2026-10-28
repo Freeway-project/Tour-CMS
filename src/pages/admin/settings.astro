@@ -1,10 +1,12 @@
 ---
 export const prerender = false;
 
+import { siteSettingsSchema, fieldErrors } from '../../lib/admin-schemas';
 import { triggerPublish } from '../../lib/publish';
-import Base from '../../layouts/Base.astro';
+import Admin from '../../layouts/Admin.astro';
 
 const supabase = Astro.locals.supabase;
+const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
 
 interface SettingsRow {
   name: string;
@@ -22,30 +24,36 @@ interface SettingsRow {
 
 let settings: SettingsRow | null = null;
 let saved = false;
-let error: string | null = null;
+let errors: Record<string, string> = {};
 
 if (supabase) {
   if (Astro.request.method === 'POST') {
     const form = await Astro.request.formData();
-    const payload = {
-      name: String(form.get('name') ?? ''),
-      tagline: String(form.get('tagline') ?? ''),
-      phone: String(form.get('phone') ?? ''),
-      whatsapp: String(form.get('whatsapp') ?? ''),
-      email: String(form.get('email') ?? ''),
-      address: String(form.get('address') ?? ''),
-      hst_number: String(form.get('hst_number') ?? '') || null,
-      cancellation_policy: String(form.get('cancellation_policy') ?? ''),
-      announcement_enabled: form.get('announcement_enabled') === 'on',
-      announcement_text: String(form.get('announcement_text') ?? ''),
-      announcement_href: String(form.get('announcement_href') ?? '') || null,
-      updated_at: new Date().toISOString(),
-    };
-    const { error: updateError } = await supabase.from('site_settings').update(payload).eq('id', 1);
-    if (updateError) error = updateError.message;
-    else {
-      saved = true;
-      await triggerPublish();
+    const parsed = siteSettingsSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const payload = {
+        name: data.name,
+        tagline: data.tagline,
+        phone: data.phone,
+        whatsapp: data.whatsapp,
+        email: data.email,
+        address: data.address,
+        hst_number: data.hst_number ?? null,
+        cancellation_policy: data.cancellation_policy,
+        announcement_enabled: data.announcement_enabled,
+        announcement_text: data.announcement_text ?? '',
+        announcement_href: data.announcement_href ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: updateError } = await supabase.from('site_settings').update(payload).eq('id', 1);
+      if (updateError) errors._form = updateError.message;
+      else {
+        saved = true;
+        await triggerPublish(supabase, waitUntil);
+      }
     }
   }
 
@@ -57,48 +65,53 @@ if (supabase) {
   settings = (data as unknown as SettingsRow) ?? null;
 }
 ---
-<Base title="Admin — Site settings" description="Edit site settings.">
-  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
-  <main class="mx-auto max-w-3xl px-6 py-10">
-    <h1 class="text-2xl font-bold text-ink">Site settings</h1>
-    {saved ? <p class="mt-3 text-sm text-green-700">Saved. Changes go live in about 2 minutes.</p> : null}
-    {error ? <p class="mt-3 text-sm text-red-600">{error}</p> : null}
-    <form method="post" class="mt-6 space-y-4">
-      <label class="block text-sm font-medium text-ink">Name
-        <input name="name" value={settings?.name ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Tagline
-        <input name="tagline" value={settings?.tagline ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Phone
-        <input name="phone" value={settings?.phone ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">WhatsApp
-        <input name="whatsapp" value={settings?.whatsapp ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Email
-        <input name="email" value={settings?.email ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Address
-        <input name="address" value={settings?.address ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">HST number
-        <input name="hst_number" value={settings?.hst_number ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Cancellation policy (markdown)
-        <textarea name="cancellation_policy" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.cancellation_policy ?? ''}</textarea>
-      </label>
-      <label class="flex items-center gap-2 text-sm font-medium text-ink">
-        <input type="checkbox" name="announcement_enabled" checked={settings?.announcement_enabled ?? false} />
-        Announcement enabled
-      </label>
-      <label class="block text-sm font-medium text-ink">Announcement text
-        <input name="announcement_text" value={settings?.announcement_text ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <label class="block text-sm font-medium text-ink">Announcement link
-        <input name="announcement_href" value={settings?.announcement_href ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
-      </label>
-      <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Save</button>
-    </form>
-  </main>
-</Base>
+
+<Admin title="Site settings" description="Edit site settings." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+
+  <form method="post" class="mt-6 space-y-4">
+    <label class="block text-sm font-medium text-ink">Name
+      <input name="name" value={settings?.name ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.name ? <span class="text-xs text-red-600">{errors.name}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Tagline
+      <input name="tagline" value={settings?.tagline ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.tagline ? <span class="text-xs text-red-600">{errors.tagline}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Phone
+      <input name="phone" value={settings?.phone ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.phone ? <span class="text-xs text-red-600">{errors.phone}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">WhatsApp
+      <input name="whatsapp" value={settings?.whatsapp ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.whatsapp ? <span class="text-xs text-red-600">{errors.whatsapp}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Email
+      <input name="email" value={settings?.email ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.email ? <span class="text-xs text-red-600">{errors.email}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Address
+      <input name="address" value={settings?.address ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.address ? <span class="text-xs text-red-600">{errors.address}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">HST number
+      <input name="hst_number" value={settings?.hst_number ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+    </label>
+    <label class="block text-sm font-medium text-ink">Cancellation policy (markdown)
+      <textarea name="cancellation_policy" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.cancellation_policy ?? ''}</textarea>
+      {errors.cancellation_policy ? <span class="text-xs text-red-600">{errors.cancellation_policy}</span> : null}
+    </label>
+    <label class="flex items-center gap-2 text-sm font-medium text-ink">
+      <input type="checkbox" name="announcement_enabled" checked={settings?.announcement_enabled ?? false} />
+      Announcement enabled
+    </label>
+    <label class="block text-sm font-medium text-ink">Announcement text
+      <input name="announcement_text" value={settings?.announcement_text ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+    </label>
+    <label class="block text-sm font-medium text-ink">Announcement link
+      <input name="announcement_href" value={settings?.announcement_href ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.announcement_href ? <span class="text-xs text-red-600">{errors.announcement_href}</span> : null}
+    </label>
+    <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Save</button>
+  </form>
+</Admin>

@@ -1,53 +1,58 @@
 import { defineMiddleware } from 'astro:middleware';
 
+import { adminGuard } from './lib/admin-guard';
 import { createSupabaseServerClient } from './lib/supabase-server';
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const path = context.url.pathname;
 
-  // Only /admin is protected; everything else (including /api) is public.
-  if (!path.startsWith('/admin')) return next();
-
-  const supabase = createSupabaseServerClient(context);
-  if (!supabase) {
-    context.locals.supabase = null;
+  // Only /admin and /admin/... are protected. /administrator and everything
+  // else (including /api) pass through untouched.
+  const isAdminRoute = path === '/admin' || path.startsWith('/admin/');
+  if (!isAdminRoute) {
+    context.locals.supabase = createSupabaseServerClient(context);
     context.locals.user = null;
-    return context.redirect('/admin/login?error=not_configured');
-  }
-  context.locals.supabase = supabase;
-
-  // Login page and its assets stay public.
-  if (path === '/admin/login' || path.startsWith('/admin/login/')) {
-    if (!supabase) {
-      context.locals.supabase = null;
-      context.locals.user = null;
-      return next();
-    }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    context.locals.user = user ? { id: user.id, email: user.email ?? undefined } : null;
     return next();
   }
 
-  if (!supabase) {
-    context.locals.supabase = null;
-    context.locals.user = null;
-    return context.redirect('/admin/login?error=not_configured');
+  const supabase = createSupabaseServerClient(context);
+  context.locals.supabase = supabase;
+
+  const isLoginPage = path === '/admin/login' || path.startsWith('/admin/login/');
+
+  let userId: string | null = null;
+  let isAdmin = false;
+
+  if (supabase && isLoginPage) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+    context.locals.user = user ? { id: user.id, email: user.email ?? undefined } : null;
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return context.redirect('/admin/login');
+  if (supabase && !isLoginPage) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+    if (user) {
+      const { data } = await supabase.rpc('is_admin');
+      isAdmin = data === true;
+    }
+    context.locals.user = user ? { id: user.id, email: user.email ?? undefined } : null;
   }
 
-  const { data: isAdmin } = await supabase.rpc('is_admin');
-  if (!isAdmin) {
-    return context.redirect('/admin/login?error=not_admin');
+  const result = adminGuard({
+    path,
+    configured: supabase !== null,
+    userId,
+    isAdmin,
+  });
+
+  if (result.action === 'redirect') {
+    return context.redirect(result.to);
   }
 
-  context.locals.user = { id: user.id, email: user.email ?? undefined };
   return next();
 });

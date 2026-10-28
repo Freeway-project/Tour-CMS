@@ -4,11 +4,21 @@ export const prerender = false;
 import Base from '../../layouts/Base.astro';
 
 const supabase = Astro.locals.supabase;
-let errorMessage: string | null = Astro.url.searchParams.get('error');
+const urlError = Astro.url.searchParams.get('error');
+let errorMessage: string | null =
+  urlError === 'not_configured'
+    ? 'Admin is not configured yet.'
+    : urlError === 'not_admin'
+      ? 'That account is not an admin.'
+      : urlError;
+
+if (!supabase) {
+  errorMessage = 'Admin is not configured yet.';
+}
 
 if (Astro.request.method === 'POST') {
   if (!supabase) {
-    errorMessage = 'Supabase is not configured.';
+    errorMessage = 'Admin is not configured yet.';
   } else {
     const form = await Astro.request.formData();
     const email = String(form.get('email') ?? '');

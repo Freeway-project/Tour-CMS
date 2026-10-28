@@ -1,0 +1,130 @@
+---
+export const prerender = false;
+
+import { bookingNotesSchema, fieldErrors } from '../../../lib/admin-schemas';
+import { formatTorontoDate, formatTorontoTime } from '../../../lib/datetime';
+import Admin from '../../../layouts/Admin.astro';
+
+const supabase = Astro.locals.supabase;
+const id = Astro.params.id as string;
+
+interface BookingRow {
+  id: string;
+  reference: string;
+  departure_id: string;
+  package_id: string;
+  pickup_location_id: string | null;
+  adults: number;
+  children: number;
+  seniors: number;
+  addons: Array<{ addon_id: string; name: string; quantity: number; unit_price_cents: number; line_total_cents: number }>;
+  subtotal_cents: number;
+  tax_cents: number;
+  total_cents: number;
+  currency: string;
+  status: string;
+  hold_expires_at: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  notes: string | null;
+  created_at: string;
+  departures: { starts_at: string; tours: { title: string } | null } | null;
+  packages: { name: string } | null;
+  pickup_locations: { name: string; address: string } | null;
+}
+
+let errors: Record<string, string> = {};
+let saved = false;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? 'notes');
+
+  if (intent === 'notes') {
+    const parsed = bookingNotesSchema.safeParse({ id, notes: String(form.get('notes') ?? '') });
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const { error: e } = await supabase.from('bookings').update({ notes: parsed.data.notes ?? null }).eq('id', id);
+      if (e) errors._form = e.message; else { saved = true; }
+    }
+  } else if (intent === 'cancel') {
+    const { error: e } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+    if (e) errors._form = e.message; else { saved = true; }
+  }
+}
+
+const bookingData = supabase
+  ? await supabase
+      .from('bookings')
+      .select('id, reference, departure_id, package_id, pickup_location_id, adults, children, seniors, addons, subtotal_cents, tax_cents, total_cents, currency, status, hold_expires_at, customer_name, customer_email, customer_phone, notes, created_at, departures(starts_at, tours(title)), packages(name), pickup_locations(name, address)')
+      .eq('id', id)
+      .maybeSingle()
+  : null;
+const booking = (bookingData?.data as unknown as BookingRow | null) ?? null;
+---
+
+<Admin title={booking?.reference ?? 'Booking'} description="Booking detail." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+
+  {booking ? (
+    <div class="mt-6 space-y-6 text-sm">
+      <section class="rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Summary</h2>
+        <dl class="mt-3 grid gap-2 md:grid-cols-2">
+          <div><dt class="font-medium">Reference</dt><dd>{booking.reference}</dd></div>
+          <div><dt class="font-medium">Status</dt><dd>{booking.status}</dd></div>
+          <div><dt class="font-medium">Tour</dt><dd>{booking.departures?.tours?.title ?? '—'}</dd></div>
+          <div><dt class="font-medium">Departure (Toronto)</dt><dd>{booking.departures ? `${formatTorontoDate(booking.departures.starts_at)} ${formatTorontoTime(booking.departures.starts_at)}` : '—'}</dd></div>
+          <div><dt class="font-medium">Package</dt><dd>{booking.packages?.name ?? '—'}</dd></div>
+          <div><dt class="font-medium">People</dt><dd>{booking.adults} adults, {booking.children} children, {booking.seniors} seniors</dd></div>
+          <div><dt class="font-medium">Pickup</dt><dd>{booking.pickup_locations ? `${booking.pickup_locations.name} — ${booking.pickup_locations.address}` : '—'}</dd></div>
+          <div><dt class="font-medium">Subtotal</dt><dd>${(booking.subtotal_cents / 100).toFixed(2)}</dd></div>
+          <div><dt class="font-medium">HST</dt><dd>${(booking.tax_cents / 100).toFixed(2)}</dd></div>
+          <div><dt class="font-medium">Total</dt><dd>${(booking.total_cents / 100).toFixed(2)} {booking.currency}</dd></div>
+          <div><dt class="font-medium">Booked at</dt><dd>{new Date(booking.created_at).toLocaleString('en-CA')}</dd></div>
+          {booking.hold_expires_at ? <div><dt class="font-medium">Hold expires</dt><dd>{new Date(booking.hold_expires_at).toLocaleString('en-CA')}</dd></div> : null}
+        </dl>
+      </section>
+
+      <section class="rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Customer</h2>
+        <p>{booking.customer_name}</p>
+        <p><a href={`mailto:${booking.customer_email}`} class="text-brand hover:underline">{booking.customer_email}</a></p>
+        {booking.customer_phone ? <p><a href={`tel:${booking.customer_phone}`} class="text-brand hover:underline">{booking.customer_phone}</a></p> : null}
+      </section>
+
+      {booking.addons && booking.addons.length > 0 ? (
+        <section class="rounded border border-ink/10 bg-white p-4">
+          <h2 class="text-lg font-semibold text-ink">Add-ons</h2>
+          <ul class="mt-2 space-y-1">
+            {booking.addons.map((a) => (
+              <li>{a.name} × {a.quantity} — ${(a.line_total_cents / 100).toFixed(2)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section class="rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Notes</h2>
+        <form method="post" class="mt-2 space-y-2">
+          <input type="hidden" name="intent" value="notes" />
+          <textarea name="notes" rows="4" class="w-full rounded border border-ink/20 px-3 py-2">{booking.notes ?? ''}</textarea>
+          {errors.notes ? <p class="text-xs text-red-600">{errors.notes}</p> : null}
+          <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Save notes</button>
+        </form>
+      </section>
+
+      <section class="rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Cancel booking</h2>
+        <form method="post" onsubmit="return confirm('Cancel this booking?');" class="mt-2">
+          <input type="hidden" name="intent" value="cancel" />
+          <button type="submit" class="rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white">Cancel booking</button>
+        </form>
+      </section>
+    </div>
+  ) : (
+    <p class="mt-4 text-sm text-red-600">Booking not found.</p>
+  )}
+</Admin>

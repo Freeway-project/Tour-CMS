@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 
-import Base from '../../layouts/Base.astro';
+import Admin from '../../layouts/Admin.astro';
 
 const supabase = Astro.locals.supabase;
 
@@ -17,6 +17,16 @@ interface InquiryRow {
 }
 
 let inquiries: InquiryRow[] = [];
+let saved = false;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = String(form.get('id') ?? '');
+  const status = String(form.get('status') ?? 'contacted');
+  const { error: e } = await supabase.from('inquiries').update({ status }).eq('id', id);
+  if (!e) saved = true;
+}
+
 if (supabase) {
   const { data } = await supabase
     .from('inquiries')
@@ -26,18 +36,29 @@ if (supabase) {
   inquiries = (data as unknown as InquiryRow[]) ?? [];
 }
 ---
-<Base title="Admin — Private requests" description="Manage private tour requests.">
-  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
-  <main class="mx-auto max-w-5xl px-6 py-10">
-    <h1 class="text-2xl font-bold text-ink">Private requests</h1>
-    <ul class="mt-6 space-y-3">
-      {inquiries.map((i) => (
-        <li class="rounded border border-ink/10 bg-white p-4 text-sm">
-          <strong>{i.customer_name}</strong> — {i.group_size} people — {i.preferred_date} — {i.status}
-          <div class="mt-1 text-ink/70">{i.customer_email} {i.customer_phone ? `· ${i.customer_phone}` : ''}</div>
-          {i.message ? <p class="mt-2 text-ink/80">{i.message}</p> : null}
-        </li>
-      ))}
-    </ul>
-  </main>
-</Base>
+
+<Admin title="Private requests" description="Manage private tour requests." saved={saved}>
+  <ul class="mt-6 space-y-3">
+    {inquiries.map((i) => (
+      <li class="rounded border border-ink/10 bg-white p-4 text-sm">
+        <strong>{i.customer_name}</strong> — {i.group_size} people — {i.preferred_date} — {i.status}
+        <div class="mt-1 text-ink/70">{i.customer_email} {i.customer_phone ? `· ${i.customer_phone}` : ''}</div>
+        {i.message ? <p class="mt-2 text-ink/80">{i.message}</p> : null}
+        <div class="mt-2 flex gap-3">
+          {i.customer_phone ? <a href={`tel:${i.customer_phone}`} class="text-brand hover:underline">Call</a> : null}
+          {i.customer_phone ? <a href={`https://wa.me/${i.customer_phone.replace(/\D/g, '')}`} class="text-brand hover:underline">WhatsApp</a> : null}
+          <a href={`mailto:${i.customer_email}`} class="text-brand hover:underline">Email</a>
+        </div>
+        <form method="post" class="mt-2 flex gap-2">
+          <input type="hidden" name="id" value={i.id} />
+          <select name="status" class="rounded border border-ink/20 px-2 py-1 text-xs">
+            <option value="new" selected={i.status === 'new'}>new</option>
+            <option value="contacted" selected={i.status === 'contacted'}>contacted</option>
+            <option value="closed" selected={i.status === 'closed'}>closed</option>
+          </select>
+          <button type="submit" class="text-xs text-brand hover:underline">Update</button>
+        </form>
+      </li>
+    ))}
+  </ul>
+</Admin>

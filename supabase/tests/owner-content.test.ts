@@ -11,21 +11,27 @@ const groupPricingMigrationPath = fileURLToPath(
 const ownerContentMigrationPath = fileURLToPath(
   new URL('../migrations/0003_owner_content.sql', import.meta.url),
 );
+const adminFunctionsMigrationPath = fileURLToPath(
+  new URL('../migrations/0004_admin_functions.sql', import.meta.url),
+);
 const seedPath = fileURLToPath(new URL('../seed.sql', import.meta.url));
 
 async function createDatabase(): Promise<PGlite> {
-  const [stub, initMigration, groupPricingMigration, ownerContentMigration, seed] = await Promise.all([
-    readFile(stubPath, 'utf8'),
-    readFile(initMigrationPath, 'utf8'),
-    readFile(groupPricingMigrationPath, 'utf8'),
-    readFile(ownerContentMigrationPath, 'utf8'),
-    readFile(seedPath, 'utf8'),
-  ]);
+  const [stub, initMigration, groupPricingMigration, ownerContentMigration, adminFunctionsMigration, seed] =
+    await Promise.all([
+      readFile(stubPath, 'utf8'),
+      readFile(initMigrationPath, 'utf8'),
+      readFile(groupPricingMigrationPath, 'utf8'),
+      readFile(ownerContentMigrationPath, 'utf8'),
+      readFile(adminFunctionsMigrationPath, 'utf8'),
+      readFile(seedPath, 'utf8'),
+    ]);
   const db = new PGlite();
   await db.exec(stub);
   await db.exec(initMigration);
   await db.exec(groupPricingMigration);
   await db.exec(ownerContentMigration);
+  await db.exec(adminFunctionsMigration);
   await db.exec(seed);
   return db;
 }
@@ -167,6 +173,12 @@ describe('owner content (task 05)', () => {
     );
     expect(tours).toHaveLength(0);
 
+    await db.query('reset role');
+  });
+
+  it('admin_generate_departures errors for a non-admin', async () => {
+    await db.query('set role authenticated');
+    await expect(db.query(`select public.admin_generate_departures(1)`)).rejects.toThrow();
     await db.query('reset role');
   });
 });

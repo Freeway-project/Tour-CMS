@@ -1,0 +1,566 @@
+---
+export const prerender = false;
+
+import { slugify } from '../../../lib/slug';
+import {
+  tourSchema,
+  packageSchema,
+  addonSchema,
+  fieldErrors,
+  imageAltSchema,
+} from '../../../lib/admin-schemas';
+import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
+import { triggerPublish } from '../../../lib/publish';
+import Admin from '../../../layouts/Admin.astro';
+
+const supabase = Astro.locals.supabase;
+const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
+const id = Astro.params.id as string;
+
+interface TourRow {
+  id: string;
+  slug: string;
+  title: string;
+  short_description: string;
+  description: string;
+  duration_minutes: number;
+  status: string;
+  is_private: boolean;
+  sort_order: number;
+  highlights: string[] | null;
+  important_info: string | null;
+  hero_image_path: string;
+}
+
+interface PackageRow {
+  id: string;
+  name: string;
+  description: string | null;
+  includes: string[] | null;
+  price_adult_cents: number;
+  price_child_cents: number | null;
+  price_senior_cents: number | null;
+  pricing_mode: string;
+  max_pax: number | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface AddonRow {
+  id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  pricing: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface ImageRow {
+  id: string;
+  storage_path: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+  sort_order: number;
+  is_hero: boolean;
+}
+
+let errors: Record<string, string> = {};
+let saved = Astro.url.searchParams.get('saved') === '1';
+let message: string | null = null;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? 'tour');
+
+  if (intent === 'tour') {
+    const parsed = tourSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const durationMinutes = data.duration_hours * 60 + data.duration_minutes_extra;
+      const slug = data.slug && data.slug.length > 0 ? data.slug : slugify(data.title);
+      const { error: updateError } = await supabase
+        .from('tours')
+        .update({
+          slug,
+          title: data.title,
+          short_description: data.short_description,
+          description: data.description,
+          highlights: data.highlights,
+          important_info: data.important_info ?? null,
+          duration_minutes: durationMinutes,
+          status: data.status,
+          is_private: data.is_private,
+          sort_order: data.sort_order,
+        })
+        .eq('id', id);
+      if (updateError) {
+        errors._form = updateError.message;
+      } else {
+        saved = true;
+        await triggerPublish(supabase, waitUntil);
+      }
+    }
+  } else if (intent === 'package-new' || intent === 'package-edit') {
+    const parsed = packageSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const payload = {
+        tour_id: id,
+        name: data.name,
+        description: data.description ?? null,
+        includes: data.includes,
+        price_adult_cents: data.price_adult_cents,
+        price_child_cents: data.price_child_cents ?? null,
+        price_senior_cents: data.price_senior_cents ?? null,
+        pricing_mode: data.pricing_mode,
+        max_pax: data.max_pax ?? null,
+        is_active: data.is_active,
+        sort_order: data.sort_order,
+      };
+      if (intent === 'package-new') {
+        const { error: e } = await supabase.from('packages').insert(payload);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      } else {
+        const pkgId = String(form.get('package_id') ?? '');
+        const { error: e } = await supabase.from('packages').update(payload).eq('id', pkgId);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      }
+    }
+  } else if (intent === 'package-toggle') {
+    const pkgId = String(form.get('package_id') ?? '');
+    const { error: e } = await supabase.from('packages').update({ is_active: form.get('is_active') === 'on' }).eq('id', pkgId);
+    if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+  } else if (intent === 'addon-new' || intent === 'addon-edit') {
+    const parsed = addonSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const payload = {
+        tour_id: id,
+        name: data.name,
+        description: data.description ?? null,
+        price_cents: data.price_cents,
+        pricing: data.pricing,
+        is_active: data.is_active,
+        sort_order: data.sort_order,
+      };
+      if (intent === 'addon-new') {
+        const { error: e } = await supabase.from('addons').insert(payload);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      } else {
+        const addonId = String(form.get('addon_id') ?? '');
+        const { error: e } = await supabase.from('addons').update(payload).eq('id', addonId);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      }
+    }
+  } else if (intent === 'image-delete') {
+    const imageId = String(form.get('image_id') ?? '');
+    const { error: e } = await supabase.from('tour_images').delete().eq('id', imageId);
+    if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+  } else if (intent === 'image-hero') {
+    const imageId = String(form.get('image_id') ?? '');
+    await supabase.from('tour_images').update({ is_hero: false }).eq('tour_id', id);
+    const { error: e } = await supabase.from('tour_images').update({ is_hero: true }).eq('id', imageId);
+    if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+  } else if (intent === 'image-alt') {
+    const parsed = imageAltSchema.safeParse(Object.fromEntries(form));
+    const imageId = String(form.get('image_id') ?? '');
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const { error: e } = await supabase.from('tour_images').update({ alt: parsed.data.alt }).eq('id', imageId);
+      if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+    }
+  } else if (intent === 'image-upload') {
+    const alt = String(form.get('alt') ?? '').trim();
+    const width = Number(form.get('width') ?? 0);
+    const height = Number(form.get('height') ?? 0);
+    const file = form.get('file');
+    if (!(file instanceof File) || file.size === 0) {
+      errors._form = 'Choose a photo to upload.';
+    } else if (alt.length < 3) {
+      errors._form = 'Alt text is required.';
+    } else if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+      errors._form = 'Could not read image dimensions.';
+    } else {
+      const { data: existingImgs } = await supabase.from('tour_images').select('id').eq('tour_id', id);
+      const imgCount = existingImgs?.length ?? 0;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${id}/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage.from('tour-images').upload(path, file, {
+        contentType: file.type || 'image/webp',
+        upsert: false,
+      });
+      if (upErr) {
+        errors._form = upErr.message;
+      } else {
+        const { error: dbErr } = await supabase.from('tour_images').insert({
+          tour_id: id,
+          storage_path: path,
+          alt,
+          width,
+          height,
+          sort_order: imgCount,
+          is_hero: imgCount === 0,
+        });
+        if (dbErr) {
+          errors._form = dbErr.message;
+        } else {
+          saved = true;
+          await triggerPublish(supabase, waitUntil);
+        }
+      }
+    }
+  } else if (intent === 'image-move') {
+    const imageId = String(form.get('image_id') ?? '');
+    const direction = String(form.get('direction') ?? '');
+    const { data: imgs } = await supabase
+      .from('tour_images')
+      .select('id, sort_order')
+      .eq('tour_id', id)
+      .order('sort_order', { ascending: true });
+    const list = (imgs as unknown as Array<{ id: string; sort_order: number }>) ?? [];
+    const idx = list.findIndex((img) => img.id === imageId);
+    if (idx >= 0) {
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx >= 0 && swapIdx < list.length) {
+        const a = list[idx];
+        const b = list[swapIdx];
+        if (a && b) {
+          await supabase.from('tour_images').update({ sort_order: b.sort_order }).eq('id', a.id);
+          await supabase.from('tour_images').update({ sort_order: a.sort_order }).eq('id', b.id);
+          saved = true;
+          await triggerPublish(supabase, waitUntil);
+        }
+      }
+    }
+  }
+}
+
+// Load current data.
+const tourQuery = supabase
+  ? await supabase
+      .from('tours')
+      .select('id, slug, title, short_description, description, duration_minutes, status, is_private, sort_order, highlights, important_info, hero_image_path')
+      .eq('id', id)
+      .maybeSingle()
+  : null;
+const tour = (tourQuery?.data as unknown as TourRow | null) ?? null;
+
+const packagesQuery = supabase
+  ? await supabase
+      .from('packages')
+      .select('id, name, description, includes, price_adult_cents, price_child_cents, price_senior_cents, pricing_mode, max_pax, is_active, sort_order')
+      .eq('tour_id', id)
+      .order('sort_order', { ascending: true })
+  : null;
+const packages = (packagesQuery?.data as unknown as PackageRow[] | null) ?? [];
+
+const addonsQuery = supabase
+  ? await supabase
+      .from('addons')
+      .select('id, name, description, price_cents, pricing, is_active, sort_order')
+      .eq('tour_id', id)
+      .order('sort_order', { ascending: true })
+  : null;
+const addons = (addonsQuery?.data as unknown as AddonRow[] | null) ?? [];
+
+const imagesQuery = supabase
+  ? await supabase
+      .from('tour_images')
+      .select('id, storage_path, alt, width, height, sort_order, is_hero')
+      .eq('tour_id', id)
+      .order('sort_order', { ascending: true })
+  : null;
+const images = (imagesQuery?.data as unknown as ImageRow[] | null) ?? [];
+
+const hours = tour ? Math.floor(tour.duration_minutes / 60) : 0;
+const mins = tour ? tour.duration_minutes % 60 : 0;
+---
+
+<Admin title={tour?.title ?? 'Tour'} description="Edit tour." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+  {message ? <p class="mt-3 text-sm text-green-700">{message}</p> : null}
+
+  {tour ? (
+    <>
+      <section class="mt-6 rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Tour details</h2>
+        <form method="post" class="mt-4 space-y-4">
+          <input type="hidden" name="intent" value="tour" />
+          <label class="block text-sm font-medium text-ink">Title
+            <input name="title" value={tour.title} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            {errors.title ? <span class="text-xs text-red-600">{errors.title}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">Slug
+            <input name="slug" value={tour.slug} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            {errors.slug ? <span class="text-xs text-red-600">{errors.slug}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">Short description
+            <input name="short_description" value={tour.short_description} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            {errors.short_description ? <span class="text-xs text-red-600">{errors.short_description}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">Description
+            <textarea name="description" rows="6" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{tour.description}</textarea>
+            {errors.description ? <span class="text-xs text-red-600">{errors.description}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">Highlights (one per line)
+            <textarea name="highlights" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{(tour.highlights ?? []).join('\n')}</textarea>
+          </label>
+          <label class="block text-sm font-medium text-ink">Important info
+            <textarea name="important_info" rows="3" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{tour.important_info ?? ''}</textarea>
+          </label>
+          <div class="flex gap-3">
+            <label class="block text-sm font-medium text-ink">Duration hours
+              <input name="duration_hours" type="number" min="0" max="24" value={hours} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            </label>
+            <label class="block text-sm font-medium text-ink">Duration minutes
+              <input name="duration_minutes_extra" type="number" min="0" max="59" value={mins} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            </label>
+          </div>
+          <label class="block text-sm font-medium text-ink">Status
+            <select name="status" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">
+              <option value="active" selected={tour.status === 'active'}>active</option>
+              <option value="seasonal" selected={tour.status === 'seasonal'}>seasonal</option>
+              <option value="hidden" selected={tour.status === 'hidden'}>hidden</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-2 text-sm font-medium text-ink">
+            <input type="checkbox" name="is_private" checked={tour.is_private} /> Private tour
+          </label>
+          <label class="block text-sm font-medium text-ink">Sort order
+            <input name="sort_order" type="number" value={tour.sort_order} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+          </label>
+          <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Save tour</button>
+        </form>
+      </section>
+
+      <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Packages</h2>
+        <p class="text-xs text-ink/60">Prices in dollars; plus 13% HST applied at checkout.</p>
+        <ul class="mt-3 space-y-3">
+          {packages.map((p) => (
+            <li class="rounded border border-ink/10 p-3 text-sm">
+              <form method="post" class="space-y-2">
+                <input type="hidden" name="intent" value="package-edit" />
+                <input type="hidden" name="package_id" value={p.id} />
+                <div class="grid gap-2 md:grid-cols-2">
+                  <label>Name<input name="name" value={p.name} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                  <label>Pricing mode
+                    <select name="pricing_mode" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+                      <option value="per_person" selected={p.pricing_mode === 'per_person'}>per person</option>
+                      <option value="per_group" selected={p.pricing_mode === 'per_group'}>per vehicle</option>
+                    </select>
+                  </label>
+                  <label>Price adult (dollars)<input name="price_adult_cents" value={(p.price_adult_cents / 100).toFixed(2)} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                  <label>Price child (dollars)<input name="price_child_cents" value={p.price_child_cents !== null ? (p.price_child_cents / 100).toFixed(2) : ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                  <label>Price senior (dollars)<input name="price_senior_cents" value={p.price_senior_cents !== null ? (p.price_senior_cents / 100).toFixed(2) : ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                  <label>Max people (per vehicle)<input name="max_pax" value={p.max_pax ?? ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                  <label>Sort order<input name="sort_order" type="number" value={p.sort_order} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                </div>
+                <label>Description<textarea name="description" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">{p.description ?? ''}</textarea></label>
+                <label>Includes (one per line)<textarea name="includes" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">{(p.includes ?? []).join('\n')}</textarea></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked={p.is_active} /> Active</label>
+                <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Save package</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+
+        <details class="mt-4">
+          <summary class="cursor-pointer text-sm font-semibold text-brand">Add package</summary>
+          <form method="post" class="mt-3 space-y-2">
+            <input type="hidden" name="intent" value="package-new" />
+            <label>Name<input name="name" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Pricing mode
+              <select name="pricing_mode" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+                <option value="per_person">per person</option>
+                <option value="per_group">per vehicle</option>
+              </select>
+            </label>
+            <label>Price adult (dollars)<input name="price_adult_cents" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Max people (per vehicle)<input name="max_pax" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Sort order<input name="sort_order" type="number" value="0" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Description<textarea name="description" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1"></textarea></label>
+            <label>Includes (one per line)<textarea name="includes" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1"></textarea></label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked /> Active</label>
+            <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add package</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Add-ons</h2>
+        <ul class="mt-3 space-y-3">
+          {addons.map((a) => (
+            <li class="rounded border border-ink/10 p-3 text-sm">
+              <form method="post" class="space-y-2">
+                <input type="hidden" name="intent" value="addon-edit" />
+                <input type="hidden" name="addon_id" value={a.id} />
+                <label>Name<input name="name" value={a.name} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                <label>Price (dollars)<input name="price_cents" value={(a.price_cents / 100).toFixed(2)} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                <label>Pricing
+                  <select name="pricing" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+                    <option value="per_person" selected={a.pricing === 'per_person'}>per person</option>
+                    <option value="per_booking" selected={a.pricing === 'per_booking'}>per booking</option>
+                  </select>
+                </label>
+                <label>Sort order<input name="sort_order" type="number" value={a.sort_order} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+                <label>Description<textarea name="description" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">{a.description ?? ''}</textarea></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked={a.is_active} /> Active</label>
+                <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Save add-on</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <details class="mt-4">
+          <summary class="cursor-pointer text-sm font-semibold text-brand">Add add-on</summary>
+          <form method="post" class="mt-3 space-y-2">
+            <input type="hidden" name="intent" value="addon-new" />
+            <label>Name<input name="name" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Price (dollars)<input name="price_cents" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Pricing
+              <select name="pricing" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+                <option value="per_person">per person</option>
+                <option value="per_booking">per booking</option>
+              </select>
+            </label>
+            <label>Sort order<input name="sort_order" type="number" value="0" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Description<textarea name="description" rows="2" class="mt-1 w-full rounded border border-ink/20 px-2 py-1"></textarea></label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked /> Active</label>
+            <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add add-on</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+        <h2 class="text-lg font-semibold text-ink">Photos</h2>
+        <p class="text-xs text-ink/60">Uploads go to the tour-images bucket. Alt text required.</p>
+        <ul class="mt-3 space-y-3">
+          {images.map((img) => (
+            <li class="rounded border border-ink/10 p-3 text-sm">
+              <div class="flex items-center gap-3">
+                <img src={`${PUBLIC_SUPABASE_URL}/storage/v1/object/public/tour-images/${img.storage_path}`} alt={img.alt} width="80" height="60" class="h-16 w-20 rounded object-cover" loading="lazy" />
+                <div class="flex-1">
+                  <form method="post" class="flex items-center gap-2">
+                    <input type="hidden" name="intent" value="image-alt" />
+                    <input type="hidden" name="image_id" value={img.id} />
+                    <input name="alt" value={img.alt} class="w-full rounded border border-ink/20 px-2 py-1" />
+                    <button type="submit" class="text-xs text-brand hover:underline">Save alt</button>
+                  </form>
+                  <div class="mt-1 flex gap-3 text-xs">
+                    {img.is_hero ? <span class="font-semibold text-green-700">Hero</span> : (
+                      <form method="post" class="inline">
+                        <input type="hidden" name="intent" value="image-hero" />
+                        <input type="hidden" name="image_id" value={img.id} />
+                        <button type="submit" class="text-brand hover:underline">Make hero</button>
+                      </form>
+                    )}
+                    <form method="post" class="inline">
+                      <input type="hidden" name="intent" value="image-move" />
+                      <input type="hidden" name="image_id" value={img.id} />
+                      <input type="hidden" name="direction" value="up" />
+                      <button type="submit" class="text-brand hover:underline">Up</button>
+                    </form>
+                    <form method="post" class="inline">
+                      <input type="hidden" name="intent" value="image-move" />
+                      <input type="hidden" name="image_id" value={img.id} />
+                      <input type="hidden" name="direction" value="down" />
+                      <button type="submit" class="text-brand hover:underline">Down</button>
+                    </form>
+                    <form method="post" class="inline">
+                      <input type="hidden" name="intent" value="image-delete" />
+                      <input type="hidden" name="image_id" value={img.id} />
+                      <button type="submit" class="text-red-600 hover:underline">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <form id="upload-form" class="mt-4 space-y-2 rounded border border-dashed border-ink/30 p-3">
+          <label class="block text-sm font-medium text-ink">Alt text (required)
+            <input id="alt-input" name="alt" required class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+          </label>
+          <label class="block text-sm font-medium text-ink">Photo
+            <input id="file-input" type="file" accept="image/*" class="mt-1 w-full" />
+          </label>
+          <button type="button" id="upload-btn" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Upload</button>
+          <p id="upload-status" class="text-xs text-ink/60"></p>
+        </form>
+
+        <script>
+          const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
+          const altInput = document.getElementById('alt-input') as HTMLInputElement | null;
+          const btn = document.getElementById('upload-btn') as HTMLButtonElement | null;
+          const status = document.getElementById('upload-status') as HTMLElement | null;
+
+          async function resize(file: File, maxDim: number) {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+              img.src = url;
+            });
+            let width = img.naturalWidth;
+            let height = img.naturalHeight;
+            if (width > maxDim || height > maxDim) {
+              const scale = maxDim / Math.max(width, height);
+              width = Math.round(width * scale);
+              height = Math.round(height * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(url);
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.85));
+            return { blob, width, height };
+          }
+
+          if (btn && fileInput && altInput && status) {
+            btn.addEventListener('click', async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) { status.textContent = 'Choose a file.'; return; }
+            const alt = altInput.value.trim();
+            if (alt.length < 3) { status.textContent = 'Alt text is required.'; return; }
+            status.textContent = 'Resizing…';
+            try {
+              const { blob, width, height } = await resize(file, 2400);
+              const form = new FormData();
+              form.append('intent', 'image-upload');
+              form.append('alt', alt);
+              form.append('width', String(width));
+              form.append('height', String(height));
+              const resizedFile = new File([blob as Blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' });
+              form.append('file', resizedFile);
+              status.textContent = 'Uploading…';
+              const res = await fetch(window.location.href, { method: 'POST', body: form });
+              if (res.ok || res.redirected) {
+                window.location.reload();
+              } else {
+                status.textContent = 'Upload failed.';
+              }
+            } catch {
+              status.textContent = 'Upload failed.';
+            }
+          });
+          }
+        </script>
+      </section>
+    </>
+  ) : (
+    <p class="mt-4 text-sm text-red-600">Tour not found.</p>
+  )}
+</Admin>

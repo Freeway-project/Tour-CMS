@@ -1,13 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { createExports as createBaseExports } from '@astrojs/cloudflare/entrypoints/server.js';
+import type { SSRManifest } from 'astro';
 
 /**
  * Wraps Astro's Cloudflare entrypoint so we can also export a `scheduled`
  * handler for the daily cron trigger. The cron keeps departures generated and
  * the free Supabase project from pausing.
  */
-export function createExports(manifest: unknown) {
-  const base = createBaseExports(manifest as never);
+export function createExports(manifest: SSRManifest) {
+  const base = createBaseExports(manifest);
 
   return {
     default: base.default,

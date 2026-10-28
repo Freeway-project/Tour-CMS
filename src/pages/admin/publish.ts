@@ -4,9 +4,13 @@ import { triggerPublish } from '../../lib/publish';
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ redirect }) => {
-  await triggerPublish();
-  return redirect('/admin?published=1');
+export const POST: APIRoute = async ({ locals, redirect }) => {
+  const supabase = locals.supabase;
+  const waitUntil = locals.runtime?.ctx?.waitUntil;
+  if (supabase) {
+    await triggerPublish(supabase, waitUntil);
+  }
+  return redirect('/admin?saved=1');
 };
 
 export const GET: APIRoute = async ({ redirect }) => {
