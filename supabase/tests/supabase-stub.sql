@@ -30,3 +30,23 @@ stable
 as $$
   select null::uuid;
 $$;
+
+-- Supabase Storage lives in its own schema with RLS already enabled. A real
+-- project has many more columns; these are the ones the migrations touch.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false
+);
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text not null references storage.buckets (id),
+  name text not null,
+  owner uuid,
+  created_at timestamptz not null default now()
+);
+
+alter table storage.objects enable row level security;
