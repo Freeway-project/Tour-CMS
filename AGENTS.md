@@ -7,7 +7,7 @@ The owner must be able to change tours, packages, prices and dates, and see book
 ## Stack (do not change without being told)
 - **One Astro 5 app at the repo root** (no monorepo), pnpm 9, Node 22, TypeScript `strict`
 - Tailwind CSS 4. No React/Vue unless a task asks for an island.
-- Hosting: **Cloudflare** via `@astrojs/cloudflare`. Pages are **prerendered by default**; only routes that need the server set `export const prerender = false`.
+- Hosting: **Cloudflare** via `@astrojs/cloudflare`. `output: 'server'` (Astro Actions need it), so **every page must export `prerender`**: `true` for marketing pages, `false` only for routes that need the server.
 - **Supabase** (Postgres + Auth) for tours, packages, add-ons, departures, bookings, and the owner's admin login. SQL lives in `supabase/migrations/`.
 - Marketing copy (FAQ, reviews, site settings, page text) lives in **Astro content collections** in `src/content/`.
 - Payments: Stripe Checkout (later task). Email: a free-tier transactional email API (later task).
@@ -24,7 +24,8 @@ The owner must be able to change tours, packages, prices and dates, and see book
 9. Every Supabase table has **RLS enabled**. The anonymous role can only read public catalogue data. Bookings are never readable or writable by anon directly.
 10. Keep changes scoped to the task. Don't reformat unrelated files or add dependencies the task didn't ask for.
 11. **No business data in code.** Anything a customer reads about the business (tour names, prices, inclusions, times, pickup points, phone numbers, policies, FAQs, reviews) comes from Supabase so the owner can change it in `/admin`. Code holds layout and the fallback fixtures in `src/data/fixtures.ts` only.
-12. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
+12. Only stop processes you started yourself, by PID. Never use a broad `pkill -f`/`killall`; other users' processes run on this machine.
+13. Don't run `git commit`, `git push` or anything that touches git history. The orchestrator handles git.
 
 ## Commands (must all pass before a task is done)
 ```

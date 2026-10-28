@@ -4,16 +4,19 @@ import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, envField } from 'astro/config';
 
-// Pages prerender by default. Only routes that set `prerender = false` (such as
-// /api/health) run on the Cloudflare worker, which keeps the marketing pages on
-// the edge cache with zero client-side JS unless a component opts in.
+// Astro Actions require a server build output, so the app runs on the
+// Cloudflare worker. Marketing pages stay static by setting
+// `export const prerender = true`; routes that need the server (actions,
+// /api/*, /booking/confirmed) run on demand.
 export default defineConfig({
   site: 'https://torontoniagara.ca',
-  output: 'static',
+  output: 'server',
   // `compile` optimizes images with sharp at build time: the Cloudflare runtime
-  // itself has no sharp, and every page is prerendered today.
+  // itself has no sharp, and the marketing pages (where images live) prerender.
   adapter: cloudflare({ imageService: 'compile' }),
   integrations: [sitemap()],
+  // Reject cross-origin form posts (Astro's default, kept explicit here).
+  security: { checkOrigin: true },
   env: {
     schema: {
       PUBLIC_SUPABASE_URL: envField.string({

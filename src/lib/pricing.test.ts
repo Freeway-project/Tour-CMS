@@ -107,6 +107,47 @@ describe('quote', () => {
     expect(result.subtotalCents).toBe(2 * 9900 + 2 * 6000);
   });
 
+  it('prices seniors and a per-booking add-on together', () => {
+    const parkingAddon = makeAddon({
+      id: 'addon-parking',
+      name: 'Parking',
+      priceCents: 1500,
+      pricing: 'per_booking',
+    });
+
+    const result = quote({
+      pkg: makePackage({ priceChildCents: 7920, priceSeniorCents: 8910 }),
+      addons: [{ addon: parkingAddon, quantity: 3 }],
+      adults: 1,
+      seniors: 2,
+    });
+
+    // 1 × 9900 + 2 × 8910 + 1 × 1500 (per booking, not × 3) = 29220.
+    expect(result.lines).toEqual([
+      {
+        label: 'Day tour — adult',
+        quantity: 1,
+        unitCents: 9900,
+        totalCents: 9900,
+      },
+      {
+        label: 'Day tour — senior',
+        quantity: 2,
+        unitCents: 8910,
+        totalCents: 17820,
+      },
+      {
+        label: 'Parking',
+        quantity: 1,
+        unitCents: 1500,
+        totalCents: 1500,
+      },
+    ]);
+    expect(result.subtotalCents).toBe(29220);
+    expect(result.taxCents).toBe(3799);
+    expect(result.totalCents).toBe(33019);
+  });
+
   it('returns zero when there are no passengers and no add-ons', () => {
     const result = quote({ pkg: makePackage(), adults: 0 });
 
