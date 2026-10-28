@@ -1,18 +1,15 @@
 ---
 export const prerender = true;
 
-import { getCollection } from 'astro:content';
-
 import Button from '../components/Button.astro';
 import Base from '../layouts/Base.astro';
 import { getTours } from '../lib/db/catalog';
+import { getSiteSettings } from '../lib/db/content';
 import { formatCadHeadline } from '../lib/format';
 import { fromPrice, type FromPrice } from '../lib/pricing';
 import '../styles/global.css';
 
-const siteEntry = (await getCollection('site'))[0];
-if (!siteEntry) throw new Error('src/content/site.json is missing');
-const site = siteEntry.data;
+const site = await getSiteSettings();
 
 const tours = await getTours();
 
@@ -25,7 +22,7 @@ for (const tour of tours) {
 
 const heading = 'Niagara Falls Tours from Toronto';
 const description =
-  'Shared and private Niagara Falls day tours from downtown Toronto. Pickup at 55 York St, a free Canadian maple syrup tasting and stops along the Niagara Parkway.';
+  'Shared and private Niagara Falls day tours from downtown Toronto, with pickup in the city centre and stops along the Niagara Parkway.';
 ---
 
 <Base title={`${heading} | ${site.name}`} description={description} siteName={site.name}>

@@ -1,13 +1,12 @@
 ---
 export const prerender = true;
 
-import { getCollection } from 'astro:content';
-
 import BookingWidget from '../../components/booking/BookingWidget.astro';
 import InquiryForm from '../../components/booking/InquiryForm.astro';
 import Button from '../../components/Button.astro';
 import Base from '../../layouts/Base.astro';
 import { getTours } from '../../lib/db/catalog';
+import { getFaqs, getReviews, getSiteSettings } from '../../lib/db/content';
 import { formatCad, formatCadHeadline } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 import { fromPrice } from '../../lib/pricing';
@@ -28,17 +27,15 @@ interface Props {
 
 const { tour } = Astro.props;
 
-const siteEntry = (await getCollection('site'))[0];
-if (!siteEntry) throw new Error('src/content/site.json is missing');
-const site = siteEntry.data;
+const site = await getSiteSettings();
 
-const allReviews = await getCollection('reviews');
+const allReviews = await getReviews();
 const reviews = allReviews
-  .filter((entry) => entry.data.featured)
-  .sort((a, b) => b.data.date.localeCompare(a.data.date))
+  .filter((entry) => entry.featured)
+  .sort((a, b) => b.reviewDate.localeCompare(a.reviewDate))
   .slice(0, 3);
 
-const faqs = await getCollection('faqs');
+const faqs = await getFaqs();
 
 const activePackages = tour.packages.filter((pkg) => pkg.isActive);
 const pickups = tour.pickups.filter((pickup) => pickup.isActive);
@@ -63,7 +60,7 @@ const structuredRating =
     : allReviews.length > 0
       ? {
           ratingValue:
-            allReviews.reduce((sum, entry) => sum + entry.data.rating, 0) / allReviews.length,
+            allReviews.reduce((sum, entry) => sum + entry.rating, 0) / allReviews.length,
           reviewCount: allReviews.length,
         }
       : null;
@@ -257,13 +254,13 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
           {reviews.map((review) => (
             <li class="rounded-2xl border border-ink/10 bg-white p-5">
               <p class="text-sm font-semibold text-ink">
-                <span aria-hidden="true">{'★'.repeat(review.data.rating)}</span>
-                <span class="sr-only">{review.data.rating} out of 5</span>
+                <span aria-hidden="true">{'★'.repeat(review.rating)}</span>
+                <span class="sr-only">{review.rating} out of 5</span>
               </p>
-              <blockquote class="mt-2 text-sm text-ink/80">{review.data.text}</blockquote>
+              <blockquote class="mt-2 text-sm text-ink/80">{review.text}</blockquote>
               <p class="mt-3 text-xs text-ink/70">
-                {review.data.author}
-                {review.data.location ? `, ${review.data.location}` : ''}
+                {review.author}
+                {review.location ? `, ${review.location}` : ''}
               </p>
             </li>
           ))}
@@ -279,10 +276,10 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
         <div class="mt-4 space-y-2">
           {faqs.map((faq) => (
             <details class="rounded-xl border border-ink/10 bg-white p-4">
-              <summary class="cursor-pointer font-medium text-ink">{faq.data.question}</summary>
+              <summary class="cursor-pointer font-medium text-ink">{faq.question}</summary>
               <div
                 class="mt-2 space-y-3 text-sm text-ink/80"
-                set:html={renderMarkdown(faq.data.answer)}
+                set:html={renderMarkdown(faq.answer)}
               />
             </details>
           ))}

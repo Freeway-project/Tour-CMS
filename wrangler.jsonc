@@ -4,4 +4,7 @@
   "compatibility_date": "2026-10-27",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
+  "triggers": {
+    "crons": ["0 9 * * *"]
+  }
 }

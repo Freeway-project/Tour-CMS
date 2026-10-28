@@ -11,9 +11,18 @@ import { defineConfig, envField } from 'astro/config';
 export default defineConfig({
   site: 'https://torontoniagara.ca',
   output: 'server',
+  image: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**.supabase.co', pathname: '/storage/v1/object/public/tour-images/**' },
+      { protocol: 'https', hostname: '**.supabase.in', pathname: '/storage/v1/object/public/tour-images/**' },
+    ],
+  },
   // `compile` optimizes images with sharp at build time: the Cloudflare runtime
   // itself has no sharp, and the marketing pages (where images live) prerender.
-  adapter: cloudflare({ imageService: 'compile' }),
+  adapter: cloudflare({
+    imageService: 'compile',
+    workerEntryPoint: { path: 'src/worker.ts', namedExports: ['scheduled'] },
+  }),
   integrations: [sitemap()],
   // Reject cross-origin form posts (Astro's default, kept explicit here).
   security: { checkOrigin: true },
@@ -30,6 +39,11 @@ export default defineConfig({
         optional: true,
       }),
       SUPABASE_SERVICE_ROLE_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
+      CF_DEPLOY_HOOK_URL: envField.string({
         context: 'server',
         access: 'secret',
         optional: true,

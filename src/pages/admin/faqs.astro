@@ -1,0 +1,107 @@
+---
+export const prerender = false;
+
+import { faqSchema, fieldErrors } from '../../lib/admin-schemas';
+import { triggerPublish } from '../../lib/publish';
+import Admin from '../../layouts/Admin.astro';
+
+const supabase = Astro.locals.supabase;
+const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
+
+interface FaqRow {
+  id: string;
+  question: string;
+  answer: string;
+  tour_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+let faqs: FaqRow[] = [];
+let saved = false;
+let errors: Record<string, string> = {};
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? 'create');
+  if (action === 'create') {
+    const parsed = faqSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const { error: e } = await supabase.from('faqs').insert({
+        question: data.question,
+        answer: data.answer,
+        tour_id: data.tour_id ?? null,
+        sort_order: data.sort_order,
+        is_active: data.is_active,
+      });
+      if (e) errors._form = e.message;
+      else {
+        saved = true;
+        await triggerPublish(supabase, waitUntil);
+      }
+    }
+  } else if (action === 'delete') {
+    const { error: e } = await supabase.from('faqs').delete().eq('id', String(form.get('id')));
+    if (e) errors._form = e.message;
+    else {
+      saved = true;
+      await triggerPublish(supabase, waitUntil);
+    }
+  } else if (action === 'toggle') {
+    const { error: e } = await supabase
+      .from('faqs')
+      .update({ is_active: form.get('is_active') === 'on' })
+      .eq('id', String(form.get('id')));
+    if (e) errors._form = e.message;
+    else {
+      saved = true;
+      await triggerPublish(supabase, waitUntil);
+    }
+  }
+}
+
+if (supabase) {
+  const { data } = await supabase
+    .from('faqs')
+    .select('id, question, answer, tour_id, sort_order, is_active')
+    .order('sort_order', { ascending: true });
+  faqs = (data as unknown as FaqRow[]) ?? [];
+}
+---
+
+<Admin title="FAQs" description="Manage FAQs." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+
+  <form method="post" class="mt-6 space-y-3 rounded border border-ink/10 bg-white p-4">
+    <input type="hidden" name="action" value="create" />
+    <label class="block text-sm font-medium text-ink">Question
+      <input name="question" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.question ? <span class="text-xs text-red-600">{errors.question}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Answer (markdown)
+      <textarea name="answer" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2"></textarea>
+      {errors.answer ? <span class="text-xs text-red-600">{errors.answer}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Sort order
+      <input name="sort_order" type="number" value="0" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+    </label>
+    <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Add FAQ</button>
+  </form>
+
+  <ul class="mt-6 space-y-3">
+    {faqs.map((f) => (
+      <li class="rounded border border-ink/10 bg-white p-4 text-sm">
+        <strong>{f.question}</strong>
+        <p class="mt-1 text-ink/70">{f.answer.slice(0, 120)}</p>
+        <form method="post" class="mt-2">
+          <input type="hidden" name="action" value="delete" />
+          <input type="hidden" name="id" value={f.id} />
+          <button type="submit" class="text-red-600 hover:underline">Delete</button>
+        </form>
+      </li>
+    ))}
+  </ul>
+</Admin>

@@ -15,7 +15,7 @@ export function formatCad(cents: number): string {
 }
 
 /**
- * Formats an advertised "from" price: `9900` → `$99`, but keeps the cents when
+ * Formats an advertised "from" price: a whole-dollar amount renders without cents,
  * they are not zero (`9950` → `$99.50`) so the headline is never rounded down.
  */
 export function formatCadHeadline(cents: number): string {

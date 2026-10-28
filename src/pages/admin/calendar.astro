@@ -1,0 +1,360 @@
+---
+export const prerender = false;
+
+import { scheduleSchema, blackoutDateSchema, departureCapacitySchema, oneOffDepartureSchema, fieldErrors } from '../../lib/admin-schemas';
+import { triggerPublish } from '../../lib/publish';
+import Admin from '../../layouts/Admin.astro';
+
+const supabase = Astro.locals.supabase;
+const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
+
+interface DepartureRow {
+  id: string;
+  tour_id: string;
+  starts_at: string;
+  capacity: number;
+  status: string;
+  seats_left: number;
+  tour_title: string;
+}
+
+interface ScheduleRow {
+  id: string;
+  tour_id: string;
+  weekdays: number[];
+  start_time: string;
+  capacity: number;
+  valid_from: string;
+  valid_to: string | null;
+  is_active: boolean;
+}
+
+interface BlackoutRow {
+  id: string;
+  tour_id: string | null;
+  date: string;
+  reason: string | null;
+}
+
+interface TourRow {
+  id: string;
+  title: string;
+}
+
+let departures: DepartureRow[] = [];
+let schedules: ScheduleRow[] = [];
+let blackouts: BlackoutRow[] = [];
+let tours: TourRow[] = [];
+let errors: Record<string, string> = {};
+let saved = false;
+let capacityError: string | null = null;
+
+async function loadData() {
+  if (!supabase) return;
+  const { data: d } = await supabase
+    .from('departure_availability')
+    .select('id, tour_id, starts_at, capacity, status, seats_left')
+    .gte('starts_at', new Date().toISOString())
+    .order('starts_at', { ascending: true })
+    .limit(120);
+  const depRows = (d as unknown as Array<Omit<DepartureRow, 'tour_title'>>) ?? [];
+  const { data: t } = await supabase.from('tours').select('id, title').order('sort_order', { ascending: true });
+  tours = (t as unknown as TourRow[]) ?? [];
+  const titleById = new Map(tours.map((x) => [x.id, x.title]));
+  departures = depRows.map((r) => ({ ...r, tour_title: titleById.get(r.tour_id) ?? r.tour_id }));
+
+  const { data: s } = await supabase
+    .from('schedules')
+    .select('id, tour_id, weekdays, start_time, capacity, valid_from, valid_to, is_active')
+    .order('valid_from', { ascending: true });
+  schedules = (s as unknown as ScheduleRow[]) ?? [];
+
+  const { data: b } = await supabase
+    .from('blackout_dates')
+    .select('id, tour_id, date, reason')
+    .order('date', { ascending: true });
+  blackouts = (b as unknown as BlackoutRow[]) ?? [];
+}
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+
+  if (intent === 'departure-status') {
+    const depId = String(form.get('id') ?? '');
+    const status = String(form.get('status') ?? 'open');
+    const { error: e } = await supabase.from('departures').update({ status }).eq('id', depId);
+    if (e) errors._form = e.message; else { saved = true; }
+  } else if (intent === 'departure-capacity') {
+    const depId = String(form.get('id') ?? '');
+    const capacity = Number(form.get('capacity') ?? 0);
+    const parsed = departureCapacitySchema.safeParse({ id: depId, capacity: String(capacity) });
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const { data: seatsTaken } = await supabase.rpc('departure_seats_taken', { p_departure_id: depId });
+      const taken = typeof seatsTaken === 'number' ? seatsTaken : Number(seatsTaken ?? 0);
+      if (parsed.data.capacity < taken) {
+        capacityError = `Capacity cannot be below seats already taken (${taken}).`;
+      } else {
+        const { error: e } = await supabase.from('departures').update({ capacity: parsed.data.capacity }).eq('id', depId);
+        if (e) errors._form = e.message; else { saved = true; }
+      }
+    }
+  } else if (intent === 'departure-add') {
+    const tourId = String(form.get('tour_id') ?? '');
+    const startsAt = String(form.get('starts_at') ?? '');
+    const capacity = Number(form.get('capacity') ?? 0);
+    const parsed = oneOffDepartureSchema.safeParse({
+      tour_id: tourId,
+      starts_at: startsAt,
+      capacity: String(capacity),
+    });
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const iso = new Date(parsed.data.starts_at).toISOString();
+      const { error: e } = await supabase.from('departures').insert({
+        tour_id: parsed.data.tour_id,
+        starts_at: iso,
+        capacity: parsed.data.capacity,
+        status: 'open',
+      });
+      if (e) errors._form = e.message; else { saved = true; }
+    }
+  } else if (intent === 'schedule-new' || intent === 'schedule-edit') {
+    const weekdays = form.getAll('weekdays').map((v) => Number(v));
+    const raw = {
+      tour_id: String(form.get('tour_id') ?? ''),
+      weekdays,
+      start_time: String(form.get('start_time') ?? ''),
+      capacity: String(form.get('capacity') ?? ''),
+      valid_from: String(form.get('valid_from') ?? ''),
+      valid_to: String(form.get('valid_to') ?? ''),
+      is_active: form.get('is_active') === 'on' ? 'on' : undefined,
+    };
+    const parsed = scheduleSchema.safeParse(raw);
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const payload = {
+        tour_id: data.tour_id,
+        weekdays: data.weekdays,
+        start_time: data.start_time,
+        capacity: data.capacity,
+        valid_from: data.valid_from,
+        valid_to: data.valid_to ?? null,
+        is_active: data.is_active,
+      };
+      if (intent === 'schedule-new') {
+        const { error: e } = await supabase.from('schedules').insert(payload);
+        if (e) errors._form = e.message;
+        else {
+          saved = true;
+          await supabase.rpc('admin_generate_departures', { p_days: 120 });
+          await triggerPublish(supabase, waitUntil);
+        }
+      } else {
+        const schedId = String(form.get('schedule_id') ?? '');
+        const { error: e } = await supabase.from('schedules').update(payload).eq('id', schedId);
+        if (e) errors._form = e.message;
+        else {
+          saved = true;
+          await supabase.rpc('admin_generate_departures', { p_days: 120 });
+          await triggerPublish(supabase, waitUntil);
+        }
+      }
+    }
+  } else if (intent === 'blackout-add') {
+    const raw = {
+      tour_id: String(form.get('tour_id') ?? ''),
+      date: String(form.get('date') ?? ''),
+      reason: String(form.get('reason') ?? ''),
+    };
+    const parsed = blackoutDateSchema.safeParse(raw);
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const { error: e } = await supabase.from('blackout_dates').insert({
+        tour_id: parsed.data.tour_id ?? null,
+        date: parsed.data.date,
+        reason: parsed.data.reason ?? null,
+      });
+      if (e) errors._form = e.message; else { saved = true; await supabase.rpc('admin_generate_departures', { p_days: 120 }); }
+    }
+  } else if (intent === 'blackout-delete') {
+    const blackoutId = String(form.get('id') ?? '');
+    const { error: e } = await supabase.from('blackout_dates').delete().eq('id', blackoutId);
+    if (e) errors._form = e.message; else { saved = true; await supabase.rpc('admin_generate_departures', { p_days: 120 }); }
+  }
+}
+
+await loadData();
+---
+
+<Admin title="Calendar" description="Manage departures." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+  {capacityError ? <p class="mt-3 text-sm text-red-600">{capacityError}</p> : null}
+
+  <section class="mt-6 rounded border border-ink/10 bg-white p-4">
+    <h2 class="text-lg font-semibold text-ink">Departures (next 60 days)</h2>
+    <ul class="mt-3 space-y-2 text-sm">
+      {departures.map((d) => (
+        <li class="rounded border border-ink/10 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span>{d.tour_title} — {new Date(d.starts_at).toLocaleString('en-CA')} — {d.seats_left}/{d.capacity} seats left — {d.status}</span>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <form method="post" class="flex items-center gap-2">
+              <input type="hidden" name="intent" value="departure-status" />
+              <input type="hidden" name="id" value={d.id} />
+              <select name="status" class="rounded border border-ink/20 px-2 py-1 text-xs">
+                <option value="open" selected={d.status === 'open'}>open</option>
+                <option value="closed" selected={d.status === 'closed'}>closed</option>
+                <option value="cancelled" selected={d.status === 'cancelled'}>cancelled</option>
+              </select>
+              <button type="submit" class="text-xs text-brand hover:underline">Update status</button>
+            </form>
+            <form method="post" class="flex items-center gap-2">
+              <input type="hidden" name="intent" value="departure-capacity" />
+              <input type="hidden" name="id" value={d.id} />
+              <input name="capacity" type="number" value={d.capacity} class="w-20 rounded border border-ink/20 px-2 py-1 text-xs" />
+              <button type="submit" class="text-xs text-brand hover:underline">Set capacity</button>
+            </form>
+          </div>
+        </li>
+      ))}
+    </ul>
+
+    <details class="mt-4">
+      <summary class="cursor-pointer text-sm font-semibold text-brand">Add one-off departure</summary>
+      <form method="post" class="mt-3 space-y-2">
+        <input type="hidden" name="intent" value="departure-add" />
+        <label class="block text-sm font-medium text-ink">Tour
+          <select name="tour_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+            {tours.map((t) => <option value={t.id}>{t.title}</option>)}
+          </select>
+        </label>
+        <label class="block text-sm font-medium text-ink">Starts at
+          <input name="starts_at" type="datetime-local" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <label class="block text-sm font-medium text-ink">Capacity
+          <input name="capacity" type="number" value="11" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add departure</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+    <h2 class="text-lg font-semibold text-ink">Schedules</h2>
+    <ul class="mt-3 space-y-3 text-sm">
+      {schedules.map((s) => (
+        <li class="rounded border border-ink/10 p-3">
+          <form method="post" class="space-y-2">
+            <input type="hidden" name="intent" value="schedule-edit" />
+            <input type="hidden" name="schedule_id" value={s.id} />
+            <label>Tour
+              <select name="tour_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+                {tours.map((t) => <option value={t.id} selected={t.id === s.tour_id}>{t.title}</option>)}
+              </select>
+            </label>
+            <label>Weekdays
+              <div class="mt-1 flex flex-wrap gap-2">
+                {[0,1,2,3,4,5,6].map((wd) => (
+                  <label class="text-xs">
+                    <input type="checkbox" name="weekdays" value={wd} checked={s.weekdays.includes(wd)} /> {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][wd]}
+                  </label>
+                ))}
+              </div>
+            </label>
+            <label>Start time (HH:MM)
+              <input name="start_time" value={s.start_time.slice(0,5)} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+            </label>
+            <label>Capacity
+              <input name="capacity" type="number" value={s.capacity} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+            </label>
+            <label>Valid from
+              <input name="valid_from" type="date" value={s.valid_from} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+            </label>
+            <label>Valid to (optional)
+              <input name="valid_to" type="date" value={s.valid_to ?? ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="is_active" checked={s.is_active} /> Active
+            </label>
+            <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Save schedule</button>
+          </form>
+        </li>
+      ))}
+    </ul>
+
+    <details class="mt-4">
+      <summary class="cursor-pointer text-sm font-semibold text-brand">Add schedule</summary>
+      <form method="post" class="mt-3 space-y-2">
+        <input type="hidden" name="intent" value="schedule-new" />
+        <label>Tour
+          <select name="tour_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+            {tours.map((t) => <option value={t.id}>{t.title}</option>)}
+          </select>
+        </label>
+        <label>Weekdays
+          <div class="mt-1 flex flex-wrap gap-2">
+            {[0,1,2,3,4,5,6].map((wd) => (
+              <label class="text-xs"><input type="checkbox" name="weekdays" value={wd} /> {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][wd]}</label>
+            ))}
+          </div>
+        </label>
+        <label>Start time (HH:MM)
+          <input name="start_time" value="08:00" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <label>Capacity
+          <input name="capacity" type="number" value="11" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <label>Valid from
+          <input name="valid_from" type="date" value={new Date().toISOString().slice(0,10)} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <label>Valid to (optional)
+          <input name="valid_to" type="date" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="is_active" checked /> Active
+        </label>
+        <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add schedule</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+    <h2 class="text-lg font-semibold text-ink">Blackout dates</h2>
+    <ul class="mt-3 space-y-2 text-sm">
+      {blackouts.map((b) => (
+        <li class="flex items-center justify-between rounded border border-ink/10 p-2">
+          <span>{b.date} — {b.tour_id ? (tours.find((t) => t.id === b.tour_id)?.title ?? b.tour_id) : 'All tours'} {b.reason ? `— ${b.reason}` : ''}</span>
+          <form method="post" class="inline">
+            <input type="hidden" name="intent" value="blackout-delete" />
+            <input type="hidden" name="id" value={b.id} />
+            <button type="submit" class="text-red-600 hover:underline">Remove</button>
+          </form>
+        </li>
+      ))}
+    </ul>
+    <form method="post" class="mt-4 space-y-2">
+      <input type="hidden" name="intent" value="blackout-add" />
+      <label class="block text-sm font-medium text-ink">Tour (blank = all)
+        <select name="tour_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+          <option value="">All tours</option>
+          {tours.map((t) => <option value={t.id}>{t.title}</option>)}
+        </select>
+      </label>
+      <label class="block text-sm font-medium text-ink">Date
+        <input name="date" type="date" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+      </label>
+      <label class="block text-sm font-medium text-ink">Reason
+        <input name="reason" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+      </label>
+      <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add blackout</button>
+    </form>
+  </section>
+</Admin>

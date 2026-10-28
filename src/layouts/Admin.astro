@@ -1,0 +1,45 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  saved?: boolean;
+}
+
+const { title, description = 'Admin', saved = false } = Astro.props;
+
+---
+
+<Base title={title} description={description}>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex" />
+  </Fragment>
+  <div class="min-h-screen bg-bg text-ink">
+    <header class="border-b border-ink/10 bg-white">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 text-sm">
+        <a href="/admin" class="font-bold text-brand">Today</a>
+        <a href="/admin/inquiries" class="hover:underline">Requests</a>
+        <a href="/admin/calendar" class="hover:underline">Calendar</a>
+        <a href="/admin/tours" class="hover:underline">Tours</a>
+        <a href="/admin/pickups" class="hover:underline">Pickups</a>
+        <a href="/admin/faqs" class="hover:underline">FAQs</a>
+        <a href="/admin/reviews" class="hover:underline">Reviews</a>
+        <a href="/admin/settings" class="hover:underline">Settings</a>
+        <form method="post" action="/admin/publish" class="inline">
+          <button type="submit" class="hover:underline">Publish now</button>
+        </form>
+        <form method="post" action="/admin/logout" class="inline">
+          <button type="submit" class="hover:underline">Log out</button>
+        </form>
+      </div>
+    </header>
+    <main class="mx-auto max-w-6xl px-4 py-6">
+      <h1 class="text-2xl font-bold text-ink">{title}</h1>
+      {saved ? (
+        <p class="mt-3 text-sm text-green-700">Saved. Changes go live in about 2 minutes.</p>
+      ) : null}
+      <slot />
+    </main>
+  </div>
+</Base>

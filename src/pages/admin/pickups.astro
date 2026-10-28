@@ -1,0 +1,195 @@
+---
+export const prerender = false;
+
+import { pickupLocationSchema, pickupTimeSchema, fieldErrors } from '../../lib/admin-schemas';
+import { triggerPublish } from '../../lib/publish';
+import Admin from '../../layouts/Admin.astro';
+
+const supabase = Astro.locals.supabase;
+const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
+
+interface LocationRow {
+  id: string;
+  name: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  pickup_note: string | null;
+  is_active: boolean;
+}
+
+interface TourRow {
+  id: string;
+  title: string;
+}
+
+interface PickupTimeRow {
+  tour_id: string;
+  pickup_location_id: string;
+  pickup_time: string;
+}
+
+let locations: LocationRow[] = [];
+let tours: TourRow[] = [];
+let pickupTimes: PickupTimeRow[] = [];
+let errors: Record<string, string> = {};
+let saved = false;
+
+async function loadData() {
+  if (!supabase) return;
+  const { data: l } = await supabase
+    .from('pickup_locations')
+    .select('id, name, address, lat, lng, pickup_note, is_active')
+    .order('name', { ascending: true });
+  locations = (l as unknown as LocationRow[]) ?? [];
+  const { data: t } = await supabase.from('tours').select('id, title').order('sort_order', { ascending: true });
+  tours = (t as unknown as TourRow[]) ?? [];
+  const { data: pt } = await supabase
+    .from('tour_pickups')
+    .select('tour_id, pickup_location_id, pickup_time');
+  pickupTimes = (pt as unknown as PickupTimeRow[]) ?? [];
+}
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+
+  if (intent === 'location-new' || intent === 'location-edit') {
+    const parsed = pickupLocationSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const payload = {
+        name: data.name,
+        address: data.address,
+        lat: data.lat ?? null,
+        lng: data.lng ?? null,
+        pickup_note: data.pickup_note ?? null,
+        is_active: data.is_active,
+      };
+      if (intent === 'location-new') {
+        const { error: e } = await supabase.from('pickup_locations').insert(payload);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      } else {
+        const locId = String(form.get('location_id') ?? '');
+        const { error: e } = await supabase.from('pickup_locations').update(payload).eq('id', locId);
+        if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+      }
+    }
+  } else if (intent === 'location-toggle') {
+    const locId = String(form.get('location_id') ?? '');
+    const { error: e } = await supabase
+      .from('pickup_locations')
+      .update({ is_active: form.get('is_active') === 'on' })
+      .eq('id', locId);
+    if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+  } else if (intent === 'pickup-time-add') {
+    const parsed = pickupTimeSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) {
+      errors = fieldErrors(parsed.error);
+    } else {
+      const data = parsed.data;
+      const { error: e } = await supabase.from('tour_pickups').insert({
+        tour_id: data.tour_id,
+        pickup_location_id: data.pickup_location_id,
+        pickup_time: data.pickup_time,
+      });
+      if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+    }
+  } else if (intent === 'pickup-time-delete') {
+    const tourId = String(form.get('tour_id') ?? '');
+    const locId = String(form.get('pickup_location_id') ?? '');
+    const { error: e } = await supabase
+      .from('tour_pickups')
+      .delete()
+      .eq('tour_id', tourId)
+      .eq('pickup_location_id', locId);
+    if (e) errors._form = e.message; else { saved = true; await triggerPublish(supabase, waitUntil); }
+  }
+}
+
+await loadData();
+---
+
+<Admin title="Pickups" description="Manage pickup locations." saved={saved}>
+  {errors._form ? <p class="mt-3 text-sm text-red-600">{errors._form}</p> : null}
+
+  <section class="mt-6 rounded border border-ink/10 bg-white p-4">
+    <h2 class="text-lg font-semibold text-ink">Pickup locations</h2>
+    <ul class="mt-3 space-y-3">
+      {locations.map((l) => (
+        <li class="rounded border border-ink/10 p-3 text-sm">
+          <form method="post" class="space-y-2">
+            <input type="hidden" name="intent" value="location-edit" />
+            <input type="hidden" name="location_id" value={l.id} />
+            <label>Name<input name="name" value={l.name} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label>Address<input name="address" value={l.address} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <div class="flex gap-2">
+              <label>Lat<input name="lat" value={l.lat ?? ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+              <label>Lng<input name="lng" value={l.lng ?? ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            </div>
+            <label>Note<input name="pickup_note" value={l.pickup_note ?? ''} class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked={l.is_active} /> Active</label>
+            <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Save</button>
+          </form>
+        </li>
+      ))}
+    </ul>
+
+    <details class="mt-4">
+      <summary class="cursor-pointer text-sm font-semibold text-brand">Add location</summary>
+      <form method="post" class="mt-3 space-y-2">
+        <input type="hidden" name="intent" value="location-new" />
+        <label>Name<input name="name" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+        <label>Address<input name="address" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+        <div class="flex gap-2">
+          <label>Lat<input name="lat" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+          <label>Lng<input name="lng" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+        </div>
+        <label>Note<input name="pickup_note" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" /></label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked /> Active</label>
+        <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="mt-8 rounded border border-ink/10 bg-white p-4">
+    <h2 class="text-lg font-semibold text-ink">Per-tour pickup times</h2>
+    <ul class="mt-3 space-y-2 text-sm">
+      {pickupTimes.map((pt) => {
+        const tour = tours.find((t) => t.id === pt.tour_id);
+        const loc = locations.find((l) => l.id === pt.pickup_location_id);
+        return (
+          <li class="flex items-center justify-between rounded border border-ink/10 p-2">
+            <span>{tour?.title ?? pt.tour_id} — {loc?.name ?? pt.pickup_location_id} — {pt.pickup_time}</span>
+            <form method="post" class="inline">
+              <input type="hidden" name="intent" value="pickup-time-delete" />
+              <input type="hidden" name="tour_id" value={pt.tour_id} />
+              <input type="hidden" name="pickup_location_id" value={pt.pickup_location_id} />
+              <button type="submit" class="text-red-600 hover:underline">Remove</button>
+            </form>
+          </li>
+        );
+      })}
+    </ul>
+
+    <form method="post" class="mt-4 space-y-2">
+      <input type="hidden" name="intent" value="pickup-time-add" />
+      <label class="block text-sm font-medium text-ink">Tour
+        <select name="tour_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+          {tours.map((t) => <option value={t.id}>{t.title}</option>)}
+        </select>
+      </label>
+      <label class="block text-sm font-medium text-ink">Pickup location
+        <select name="pickup_location_id" class="mt-1 w-full rounded border border-ink/20 px-2 py-1">
+          {locations.map((l) => <option value={l.id}>{l.name}</option>)}
+        </select>
+      </label>
+      <label class="block text-sm font-medium text-ink">Pickup time (HH:MM)
+        <input name="pickup_time" class="mt-1 w-full rounded border border-ink/20 px-2 py-1" />
+      </label>
+      <button type="submit" class="rounded bg-brand px-3 py-1 text-xs font-semibold text-bg">Add pickup time</button>
+    </form>
+  </section>
+</Admin>

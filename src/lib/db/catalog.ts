@@ -73,6 +73,8 @@ interface TourRow {
   status: string;
   is_private: boolean;
   sort_order: number;
+  highlights: string[] | null;
+  important_info: string | null;
   packages: PackageRow[] | null;
   addons: AddonRow[] | null;
   tour_pickups: TourPickupRow[] | null;
@@ -98,6 +100,8 @@ const TOUR_SELECT = `
   status,
   is_private,
   sort_order,
+  highlights,
+  important_info,
   packages(id, tour_id, name, description, includes, price_adult_cents, price_child_cents, price_senior_cents, pricing_mode, max_pax, is_active, sort_order),
   addons(id, tour_id, name, description, price_cents, pricing, is_active, sort_order),
   tour_pickups(pickup_time, pickup_locations(id, name, address, lat, lng, pickup_note, is_active))
@@ -174,6 +178,8 @@ function mapTour(row: TourRow): Tour {
     status: toTourStatus(row.status),
     isPrivate: row.is_private,
     sortOrder: row.sort_order,
+    highlights: row.highlights ?? [],
+    importantInfo: row.important_info,
     packages: (row.packages ?? [])
       .filter((pkg) => pkg.is_active)
       .map(mapPackage)
