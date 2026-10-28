@@ -10,6 +10,7 @@ import type { CollectionEntry } from 'astro:content';
 
 export type TourStatus = 'active' | 'seasonal' | 'hidden';
 export type AddonPricing = 'per_person' | 'per_booking';
+export type PackagePricingMode = 'per_person' | 'per_group';
 export type DepartureStatus = 'open' | 'closed' | 'cancelled';
 
 export interface Package {
@@ -18,9 +19,16 @@ export interface Package {
   name: string;
   description: string | null;
   includes: string[];
+  /**
+   * Adult price per person, or — when `pricingMode` is `per_group` — the flat
+   * price for the whole vehicle.
+   */
   priceAdultCents: number;
   priceChildCents: number | null;
   priceSeniorCents: number | null;
+  pricingMode: PackagePricingMode;
+  /** Vehicle capacity for a `per_group` package; null for `per_person`. */
+  maxPax: number | null;
   isActive: boolean;
   sortOrder: number;
 }
