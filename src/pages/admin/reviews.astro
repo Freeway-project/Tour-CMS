@@ -1,0 +1,106 @@
+---
+export const prerender = false;
+
+import { triggerPublish } from '../../lib/publish';
+import Base from '../../layouts/Base.astro';
+
+const supabase = Astro.locals.supabase;
+
+interface ReviewRow {
+  id: string;
+  author: string;
+  location: string | null;
+  rating: number;
+  text: string;
+  review_date: string;
+  source: string;
+  featured: boolean;
+  is_active: boolean;
+}
+
+let reviews: ReviewRow[] = [];
+let saved = false;
+let error: string | null = null;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? 'create');
+  if (action === 'create') {
+    const { error: e } = await supabase.from('reviews').insert({
+      author: String(form.get('author') ?? ''),
+      location: String(form.get('location') ?? '') || null,
+      rating: Number(form.get('rating') ?? 5),
+      text: String(form.get('text') ?? ''),
+      review_date: String(form.get('review_date') ?? new Date().toISOString().slice(0, 10)),
+      source: String(form.get('source') ?? 'direct'),
+      featured: form.get('featured') === 'on',
+      is_active: true,
+    });
+    if (e) error = e.message; else { saved = true; await triggerPublish(); }
+  } else if (action === 'delete') {
+    const { error: e } = await supabase.from('reviews').delete().eq('id', String(form.get('id')));
+    if (e) error = e.message; else { saved = true; await triggerPublish(); }
+  }
+}
+
+if (supabase) {
+  const { data } = await supabase
+    .from('reviews')
+    .select('id, author, location, rating, text, review_date, source, featured, is_active')
+    .order('sort_order', { ascending: true });
+  reviews = (data as unknown as ReviewRow[]) ?? [];
+}
+---
+<Base title="Admin — Reviews" description="Manage reviews.">
+  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
+  <main class="mx-auto max-w-4xl px-6 py-10">
+    <h1 class="text-2xl font-bold text-ink">Reviews</h1>
+    {saved ? <p class="mt-3 text-sm text-green-700">Saved.</p> : null}
+    {error ? <p class="mt-3 text-sm text-red-600">{error}</p> : null}
+
+    <form method="post" class="mt-6 space-y-3 rounded border border-ink/10 bg-white p-4">
+      <input type="hidden" name="action" value="create" />
+      <label class="block text-sm font-medium text-ink">Author
+        <input name="author" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      </label>
+      <label class="block text-sm font-medium text-ink">Location
+        <input name="location" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      </label>
+      <label class="block text-sm font-medium text-ink">Rating (1-5)
+        <input name="rating" type="number" min="1" max="5" value="5" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      </label>
+      <label class="block text-sm font-medium text-ink">Text
+        <textarea name="text" rows="3" class="mt-1 w-full rounded border border-ink/20 px-3 py-2"></textarea>
+      </label>
+      <label class="block text-sm font-medium text-ink">Date
+        <input name="review_date" type="date" class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      </label>
+      <label class="block text-sm font-medium text-ink">Source
+        <select name="source" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">
+          <option value="google">google</option>
+          <option value="tripadvisor">tripadvisor</option>
+          <option value="viator">viator</option>
+          <option value="direct">direct</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 text-sm font-medium text-ink">
+        <input type="checkbox" name="featured" /> Featured
+      </label>
+      <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Add review</button>
+    </form>
+
+    <ul class="mt-6 space-y-3">
+      {reviews.map((r) => (
+        <li class="rounded border border-ink/10 bg-white p-4 text-sm">
+          <strong>{r.author}</strong> — {r.rating}★ — {r.review_date}
+          <p class="mt-1 text-ink/70">{r.text.slice(0, 120)}</p>
+          <form method="post" class="mt-2">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={r.id} />
+            <button type="submit" class="text-red-600 hover:underline">Delete</button>
+          </form>
+        </li>
+      ))}
+    </ul>
+  </main>
+</Base>

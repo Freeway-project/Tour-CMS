@@ -13,6 +13,9 @@ const initMigrationPath = fileURLToPath(new URL('../migrations/0001_init.sql', i
 const groupPricingMigrationPath = fileURLToPath(
   new URL('../migrations/0002_group_pricing.sql', import.meta.url),
 );
+const ownerContentMigrationPath = fileURLToPath(
+  new URL('../migrations/0003_owner_content.sql', import.meta.url),
+);
 const seedPath = fileURLToPath(new URL('../seed.sql', import.meta.url));
 
 const DAY_TOUR_ID = '0a000000-0000-4000-8000-000000000001';
@@ -56,10 +59,11 @@ interface SeatsLeftRow {
 }
 
 async function createDatabase(): Promise<PGlite> {
-  const [stub, initMigration, groupPricingMigration, seed] = await Promise.all([
+  const [stub, initMigration, groupPricingMigration, ownerContentMigration, seed] = await Promise.all([
     readFile(stubPath, 'utf8'),
     readFile(initMigrationPath, 'utf8'),
     readFile(groupPricingMigrationPath, 'utf8'),
+    readFile(ownerContentMigrationPath, 'utf8'),
     readFile(seedPath, 'utf8'),
   ]);
 
@@ -67,6 +71,7 @@ async function createDatabase(): Promise<PGlite> {
   await db.exec(stub);
   await db.exec(initMigration);
   await db.exec(groupPricingMigration);
+  await db.exec(ownerContentMigration);
   await db.exec(seed);
   return db;
 }

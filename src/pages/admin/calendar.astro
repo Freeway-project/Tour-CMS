@@ -1,0 +1,39 @@
+---
+export const prerender = false;
+
+import Base from '../../layouts/Base.astro';
+
+const supabase = Astro.locals.supabase;
+
+interface DepartureRow {
+  id: string;
+  tour_id: string;
+  starts_at: string;
+  capacity: number;
+  status: string;
+}
+
+let departures: DepartureRow[] = [];
+if (supabase) {
+  const { data } = await supabase
+    .from('departures')
+    .select('id, tour_id, starts_at, capacity, status')
+    .gte('starts_at', new Date().toISOString())
+    .order('starts_at', { ascending: true })
+    .limit(120);
+  departures = (data as unknown as DepartureRow[]) ?? [];
+}
+---
+<Base title="Admin — Calendar" description="Manage departures.">
+  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <h1 class="text-2xl font-bold text-ink">Calendar</h1>
+    <ul class="mt-6 space-y-2 text-sm">
+      {departures.map((d) => (
+        <li class="rounded border border-ink/10 bg-white p-3">
+          {new Date(d.starts_at).toLocaleString('en-CA')} — capacity {d.capacity} — {d.status}
+        </li>
+      ))}
+    </ul>
+  </main>
+</Base>

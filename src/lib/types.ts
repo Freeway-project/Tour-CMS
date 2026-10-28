@@ -1,5 +1,4 @@
-import type { CollectionEntry } from 'astro:content';
-
+// No content collection dependency: content now lives in Supabase.
 /**
  * Domain types.
  *
@@ -68,6 +67,9 @@ export interface Tour {
   status: TourStatus;
   isPrivate: boolean;
   sortOrder: number;
+  highlights: string[];
+  /** Markdown. */
+  importantInfo: string | null;
   packages: Package[];
   addons: Addon[];
   pickups: PickupLocation[];
@@ -105,7 +107,48 @@ export interface BookingQuote {
   lines: QuoteLine[];
 }
 
-/** Content collection types, inferred from the schemas in `src/content.config.ts`. */
-export type Review = CollectionEntry<'reviews'>['data'];
-export type Faq = CollectionEntry<'faqs'>['data'];
-export type SiteSettings = CollectionEntry<'site'>['data'];
+export interface Faq {
+  id: string;
+  question: string;
+  /** Markdown. */
+  answer: string;
+  tourId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface Review {
+  id: string;
+  author: string;
+  location: string | null;
+  rating: number;
+  text: string;
+  /** ISO date, `YYYY-MM-DD`. */
+  reviewDate: string;
+  source: 'google' | 'tripadvisor' | 'viator' | 'direct';
+  tourId: string | null;
+  featured: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface SiteRating {
+  platform: string;
+  score: number;
+  count: number;
+  url: string;
+}
+
+export interface SiteSettings {
+  name: string;
+  tagline: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  address: string;
+  hstNumber: string | null;
+  cancellationPolicy: string;
+  announcement: { enabled: boolean; text: string; href: string | null };
+  ratings: SiteRating[];
+  lastPublishAt: string | null;
+}

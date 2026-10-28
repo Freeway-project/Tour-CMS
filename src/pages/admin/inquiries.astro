@@ -1,0 +1,43 @@
+---
+export const prerender = false;
+
+import Base from '../../layouts/Base.astro';
+
+const supabase = Astro.locals.supabase;
+
+interface InquiryRow {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  group_size: number;
+  preferred_date: string;
+  status: string;
+  message: string | null;
+}
+
+let inquiries: InquiryRow[] = [];
+if (supabase) {
+  const { data } = await supabase
+    .from('inquiries')
+    .select('id, customer_name, customer_email, customer_phone, group_size, preferred_date, status, message')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  inquiries = (data as unknown as InquiryRow[]) ?? [];
+}
+---
+<Base title="Admin — Private requests" description="Manage private tour requests.">
+  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <h1 class="text-2xl font-bold text-ink">Private requests</h1>
+    <ul class="mt-6 space-y-3">
+      {inquiries.map((i) => (
+        <li class="rounded border border-ink/10 bg-white p-4 text-sm">
+          <strong>{i.customer_name}</strong> — {i.group_size} people — {i.preferred_date} — {i.status}
+          <div class="mt-1 text-ink/70">{i.customer_email} {i.customer_phone ? `· ${i.customer_phone}` : ''}</div>
+          {i.message ? <p class="mt-2 text-ink/80">{i.message}</p> : null}
+        </li>
+      ))}
+    </ul>
+  </main>
+</Base>

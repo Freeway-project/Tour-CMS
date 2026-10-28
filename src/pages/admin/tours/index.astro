@@ -1,0 +1,37 @@
+---
+export const prerender = false;
+
+import Base from '../../../layouts/Base.astro';
+
+const supabase = Astro.locals.supabase;
+
+interface TourRow {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  sort_order: number;
+}
+
+let tours: TourRow[] = [];
+if (supabase) {
+  const { data } = await supabase
+    .from('tours')
+    .select('id, slug, title, status, sort_order')
+    .order('sort_order', { ascending: true });
+  tours = (data as unknown as TourRow[]) ?? [];
+}
+---
+<Base title="Admin — Tours" description="Manage tours.">
+  <Fragment slot="head"><meta name="robots" content="noindex" /></Fragment>
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <h1 class="text-2xl font-bold text-ink">Tours</h1>
+    <ul class="mt-6 space-y-2 text-sm">
+      {tours.map((t) => (
+        <li class="rounded border border-ink/10 bg-white p-3">
+          <strong>{t.title}</strong> — {t.slug} — {t.status}
+        </li>
+      ))}
+    </ul>
+  </main>
+</Base>

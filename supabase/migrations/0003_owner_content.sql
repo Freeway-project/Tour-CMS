@@ -164,7 +164,7 @@ begin
       (((v_today + day_offset)::date + s.start_time) at time zone 'America/Toronto') as starts_at,
       s.capacity
     from public.schedules s
-    cross join generate_series(0, greatest(p_days, 0)) as day_offset
+    cross join generate_series(1, p_days) as day_offset
     where s.is_active
       and extract(dow from (v_today + day_offset)::date)::integer = any (s.weekdays)
       and (v_today + day_offset)::date >= s.valid_from
