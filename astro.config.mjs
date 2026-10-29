@@ -13,6 +13,8 @@ export default defineConfig({
   output: 'server',
   // Lets the dev server be viewed through a Cloudflare quick tunnel (demo only).
   server: { allowedHosts: ['.trycloudflare.com'] },
+  // Hide Astro's dev toolbar so demo viewers see the page as it will look.
+  devToolbar: { enabled: false },
   image: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.supabase.co', pathname: '/storage/v1/object/public/tour-images/**' },
