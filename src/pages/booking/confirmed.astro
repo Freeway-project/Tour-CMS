@@ -5,41 +5,53 @@ import Base from '../../layouts/Base.astro';
 import { getAdminClient } from '../../lib/db/admin';
 import { formatTorontoDate, formatTorontoTime } from '../../lib/datetime';
 import { formatCad } from '../../lib/format';
+import { isStripeConfigured } from '../../lib/stripe';
+import { tokensMatch } from '../../lib/tokens';
 import '../../styles/global.css';
 
 interface BookingRow {
   reference: string;
+  access_token: string;
+  status: string;
+  hold_expires_at: string | null;
   adults: number;
   children: number;
   seniors: number;
   total_cents: number;
   packages: { name: string } | null;
   pickup_locations: { name: string } | null;
-  departures: { starts_at: string; tours: { title: string } | null } | null;
+  departures: { starts_at: string; tours: { title: string; slug: string } | null } | null;
 }
 
 const reference = (Astro.url.searchParams.get('ref') ?? '').trim();
+const token = (Astro.url.searchParams.get('t') ?? '').trim();
 
 let booking: BookingRow | null = null;
 let unavailable = false;
 
-if (reference.length > 0) {
+// Both the reference and the private token are required. A wrong or missing
+// token gets the same friendly "not found" as an unknown reference, so the page
+// never confirms that a reference exists.
+if (reference.length > 0 && token.length > 0) {
   const admin = getAdminClient();
 
   if (!admin) {
     unavailable = true;
   } else {
-    // Exact-reference lookup only: a guess must never reveal another booking.
     const { data, error } = await admin
       .from('bookings')
       .select(
-        'reference, adults, children, seniors, total_cents, packages(name), pickup_locations(name), departures(starts_at, tours(title))',
+        'reference, access_token, status, hold_expires_at, adults, children, seniors, total_cents, packages(name), pickup_locations(name), departures(starts_at, tours(title, slug))',
       )
       .eq('reference', reference)
       .maybeSingle();
 
-    if (error) unavailable = true;
-    else booking = data as unknown as BookingRow | null;
+    if (error) {
+      unavailable = true;
+    } else {
+      const row = data as unknown as BookingRow | null;
+      if (row && tokensMatch(row.access_token, token)) booking = row;
+    }
   }
 }
 
@@ -61,13 +73,31 @@ const peopleParts = booking
 const peopleTotal = booking ? booking.adults + booking.children + booking.seniors : 0;
 const departure = booking?.departures ?? null;
 const tourTitle = departure?.tours?.title ?? 'Your tour';
+const tourSlug = departure?.tours?.slug ?? null;
 const when = departure
   ? `${formatTorontoDate(departure.starts_at)} at ${formatTorontoTime(departure.starts_at)}`
   : 'We will confirm the date with you';
 const pickupName = booking?.pickup_locations?.name ?? 'Pickup to be confirmed';
 
+const holdExpired = booking?.hold_expires_at
+  ? new Date(booking.hold_expires_at).getTime() <= Date.now()
+  : true;
+const stripeConfigured = isStripeConfigured();
+const isPaid = booking?.status === 'paid';
+const isPending = booking?.status === 'pending';
+const isExpired = booking?.status === 'expired' || (isPending && holdExpired && stripeConfigured);
+const canCompletePayment = isPending && !holdExpired && stripeConfigured;
+
 const title = booking
-  ? 'Booking confirmed'
+  ? isPaid
+    ? 'Booking confirmed'
+    : isExpired
+      ? 'Reservation expired'
+      : isPending && !stripeConfigured
+        ? 'Seats reserved'
+        : isPending
+          ? 'Payment not finished'
+          : 'Booking cancelled'
   : unavailable
     ? 'Booking unavailable'
     : 'Booking not found';
@@ -92,11 +122,88 @@ const title = booking
       </div>
     ) : booking ? (
       <div class="mt-8">
-        <p class="text-sm font-semibold tracking-widest text-brand uppercase">Seats reserved</p>
-        <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">Thank you — you are booked</h1>
-        <p class="mt-3 text-ink/80">
-          We have your reservation. We will email you shortly with the final details.
-        </p>
+        {isPaid ? (
+          <>
+            <p class="text-sm font-semibold tracking-widest text-brand uppercase">Paid in full</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">You're booked!</h1>
+            <p class="mt-3 text-ink/80">
+              Thank you — your payment went through and your seats are confirmed. We have emailed
+              your confirmation and will see you at pickup.
+            </p>
+          </>
+        ) : isExpired ? (
+          <>
+            <p class="text-sm font-semibold tracking-widest text-brand uppercase">Reservation</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">
+              This reservation expired
+            </h1>
+            <p class="mt-3 text-ink/80">
+              Your seats were held for 30 minutes and then released, and no payment was taken.
+              Please book again to choose a date.
+            </p>
+            {tourSlug ? (
+              <p class="mt-6">
+                <a href={`/tours/${tourSlug}#book`} class="font-medium text-brand hover:underline">
+                  Book this tour again
+                </a>
+              </p>
+            ) : (
+              <p class="mt-6">
+                <a href="/" class="font-medium text-brand hover:underline">
+                  See all tours
+                </a>
+              </p>
+            )}
+          </>
+        ) : isPending && !isStripeConfigured() ? (
+          <>
+            <p class="text-sm font-semibold tracking-widest text-brand uppercase">Seats reserved</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">
+              Thank you — your seats are reserved
+            </h1>
+            <p class="mt-3 text-ink/80">
+              We have your reservation. We'll contact you to arrange payment and confirm the final
+              details.
+            </p>
+          </>
+        ) : isPending ? (
+          <>
+            <p class="text-sm font-semibold tracking-widest text-brand uppercase">Reservation</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">Payment not finished</h1>
+            <p class="mt-3 text-ink/80">
+              Your seats are still held. Complete the payment to confirm your booking — the hold
+              lasts 30 minutes, after which the seats are released.
+            </p>
+            {canCompletePayment ? (
+              <form method="POST" action="/booking/pay" class="mt-6">
+                <input type="hidden" name="ref" value={booking.reference} />
+                <input type="hidden" name="t" value={token} />
+                <button
+                  type="submit"
+                  class="w-full rounded-pill bg-brand px-6 py-3 text-base font-semibold text-bg shadow-raised transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:w-auto"
+                >
+                  Complete payment
+                </button>
+              </form>
+            ) : (
+              <p class="mt-6 text-sm text-ink/70">
+                Online payment is unavailable right now. Please reply to your confirmation email and
+                we will help.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p class="text-sm font-semibold tracking-widest text-brand uppercase">Reservation</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">
+              This booking was cancelled
+            </h1>
+            <p class="mt-3 text-ink/80">
+              This booking is no longer active. Please reply to your confirmation email if you think
+              this is a mistake.
+            </p>
+          </>
+        )}
 
         <dl class="mt-8 space-y-4 rounded-2xl border border-ink/10 bg-white p-5">
           <div>
@@ -137,17 +244,17 @@ const title = booking
         </dl>
 
         <p class="mt-6 text-sm text-ink/70">
-          Keep your reference handy. If you need to change anything, reply to your confirmation
-          email with the reference above.
+          Keep this page private. If you need to change anything, reply to your confirmation email
+          with the reference above.
         </p>
       </div>
     ) : (
       <div class="mt-8">
         <h1 class="text-3xl font-bold tracking-tight text-ink">We could not find that booking</h1>
         <p class="mt-3 text-ink/80">
-          Check the booking reference in your confirmation email. References look like
-          <span class="font-mono"> TN-7K3F9Q</span>. If it still does not work, reply to your email
-          and we will find it for you.
+          Check the link in your confirmation email. It includes your booking reference and a
+          private code, so the page can only be opened from that email. If it still does not work,
+          reply to the email and we will find it for you.
         </p>
         <p class="mt-6">
           <a href="/" class="font-medium text-brand hover:underline">

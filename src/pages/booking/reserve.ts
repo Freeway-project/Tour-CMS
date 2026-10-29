@@ -47,7 +47,15 @@ export const POST: APIRoute = async (context) => {
     return redirect(tourErrorUrl(slug, code));
   }
 
-  return redirect(`/booking/confirmed?ref=${encodeURIComponent(result.data.reference)}`);
+  if (result.data.checkoutUrl) {
+    return redirect(result.data.checkoutUrl);
+  }
+
+  return redirect(
+    `/booking/confirmed?ref=${encodeURIComponent(
+      result.data.reference,
+    )}&t=${encodeURIComponent(result.data.accessToken)}`,
+  );
 };
 
 export const ALL: APIRoute = () => methodNotAllowed();

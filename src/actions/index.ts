@@ -1,7 +1,9 @@
 import { ActionError, defineAction } from 'astro:actions';
 
 import { messageForDbError } from '../lib/booking-errors';
+import { sendInquiryEmails } from '../lib/booking-emails';
 import { getAdminClient } from '../lib/db/admin';
+import { startBookingCheckout } from '../lib/stripe';
 import { bookingSchema, inquirySchema } from './schemas';
 
 /**
@@ -13,22 +15,27 @@ import { bookingSchema, inquirySchema } from './schemas';
  */
 
 interface ReserveBookingRow {
+  booking_id: string;
   reference: string;
   total_cents: number;
+  hold_expires_at: string;
+  access_token: string;
 }
 
 interface InquiryPackageRow {
   tour_id: string;
+  name: string;
   pricing_mode: string;
   max_pax: number | null;
   is_active: boolean;
+  tours: { title: string } | null;
 }
 
 export const server = {
   reserveBooking: defineAction({
     accept: 'form',
     input: bookingSchema,
-    handler: async (input) => {
+    handler: async (input, context) => {
       // A bot filled the hidden field. Return a dead end without booking.
       if (input.honeypot) {
         throw new ActionError({
@@ -74,15 +81,23 @@ export const server = {
         });
       }
 
-      // The caller redirects to `/booking/confirmed?ref=<reference>`.
-      return { reference: booking.reference };
+      // With Stripe configured the caller sends the customer straight to the
+      // hosted Checkout page. Without it the booking stays pending and the
+      // confirmation page explains that we will arrange payment.
+      const checkoutUrl = await startBookingCheckout(admin, booking.booking_id, context.url.origin);
+
+      return {
+        reference: booking.reference,
+        accessToken: booking.access_token,
+        checkoutUrl,
+      };
     },
   }),
 
   createInquiry: defineAction({
     accept: 'form',
     input: inquirySchema,
-    handler: async (input) => {
+    handler: async (input, context) => {
       if (input.honeypot) {
         throw new ActionError({
           code: 'BAD_REQUEST',
@@ -100,7 +115,7 @@ export const server = {
 
       const { data, error } = await admin
         .from('packages')
-        .select('tour_id, pricing_mode, max_pax, is_active')
+        .select('tour_id, name, pricing_mode, max_pax, is_active, tours(title)')
         .eq('id', input.packageId)
         .maybeSingle();
 
@@ -143,6 +158,22 @@ export const server = {
           message: 'We could not send your inquiry. Please try again in a moment.',
         });
       }
+
+      // The owner alert and the customer acknowledgement are best-effort: the
+      // inquiry is already saved, so email problems must not fail the request.
+      await sendInquiryEmails(
+        {
+          tourTitle: pkg.tours?.title ?? 'Private Niagara Falls tour',
+          packageName: pkg.name,
+          preferredDate: input.preferredDate,
+          groupSize: input.groupSize,
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone,
+          message: input.message && input.message.length > 0 ? input.message : null,
+        },
+        context.url.origin,
+      );
 
       return { ok: true };
     },

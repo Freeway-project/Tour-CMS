@@ -31,6 +31,24 @@ as $$
   select null::uuid;
 $$;
 
+-- Supabase enables pgcrypto, which provides `gen_random_bytes` to migrations.
+-- PGlite ships without contrib extensions, so this stand-in gives the tests the
+-- same function. It is never installed in a real project.
+create or replace function public.gen_random_bytes(p_bytes integer)
+returns bytea
+language sql
+volatile
+as $$
+  select substring(
+    decode(
+      replace(gen_random_uuid()::text, '-', '')
+        || replace(gen_random_uuid()::text, '-', ''),
+      'hex'
+    )
+    from 1 for p_bytes
+  );
+$$;
+
 -- Supabase Storage lives in its own schema with RLS already enabled. A real
 -- project has many more columns; these are the ones the migrations touch.
 create schema if not exists storage;
