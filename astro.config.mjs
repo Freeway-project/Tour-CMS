@@ -11,6 +11,8 @@ import { defineConfig, envField } from 'astro/config';
 export default defineConfig({
   site: 'https://torontoniagara.ca',
   output: 'server',
+  // Lets the dev server be viewed through a Cloudflare quick tunnel (demo only).
+  server: { allowedHosts: ['.trycloudflare.com'] },
   image: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.supabase.co', pathname: '/storage/v1/object/public/tour-images/**' },
