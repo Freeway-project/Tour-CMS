@@ -1,4 +1,5 @@
 import { faqs as fixtureFaqs, reviews as fixtureReviews, siteSettings as fixtureSiteSettings } from '../../data/fixtures';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Faq, Review, SiteSettings } from '../types';
 import { supabase } from './client';
 
@@ -45,10 +46,12 @@ function toReviewSource(value: string): Review['source'] {
   return value === 'tripadvisor' || value === 'viator' || value === 'direct' ? value : 'google';
 }
 
-export async function getSiteSettings(): Promise<SiteSettings> {
-  if (!supabase) return fixtureSiteSettings;
+export async function getSiteSettings(
+  client: SupabaseClient | null = supabase,
+): Promise<SiteSettings> {
+  if (!client) return fixtureSiteSettings;
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('site_settings')
     .select(
       'name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, announcement_enabled, announcement_text, announcement_href, ratings, last_publish_at',

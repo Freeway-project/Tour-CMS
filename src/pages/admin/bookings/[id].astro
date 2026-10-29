@@ -23,6 +23,7 @@ interface BookingRow {
   total_cents: number;
   currency: string;
   status: string;
+  payment_method: string;
   hold_expires_at: string | null;
   customer_name: string | null;
   customer_email: string | null;
@@ -52,13 +53,34 @@ if (supabase && Astro.request.method === 'POST') {
   } else if (intent === 'cancel') {
     const { error: e } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id);
     if (e) errors._form = e.message; else { saved = true; }
+  } else if (intent === 'mark_paid') {
+    // A manual booking is paid outside Stripe. This runs through the logged-in
+    // admin session (RLS), not the service role, and only for a pending manual
+    // booking so a stale form cannot overwrite another status.
+    const { data, error: e } = await supabase
+      .from('bookings')
+      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .eq('payment_method', 'manual')
+      .select('id');
+
+    const rows = data as unknown as Array<{ id: string }> | null;
+
+    if (e) {
+      errors._form = e.message;
+    } else if (!rows || rows.length === 0) {
+      errors._form = 'Only a pending manual booking can be marked as paid.';
+    } else {
+      saved = true;
+    }
   }
 }
 
 const bookingData = supabase
   ? await supabase
       .from('bookings')
-      .select('id, reference, departure_id, package_id, pickup_location_id, adults, children, seniors, addons, subtotal_cents, tax_cents, total_cents, currency, status, hold_expires_at, customer_name, customer_email, customer_phone, notes, created_at, departures(starts_at, tours(title)), packages(name), pickup_locations(name, address)')
+      .select('id, reference, departure_id, package_id, pickup_location_id, adults, children, seniors, addons, subtotal_cents, tax_cents, total_cents, currency, status, payment_method, hold_expires_at, customer_name, customer_email, customer_phone, notes, created_at, departures(starts_at, tours(title)), packages(name), pickup_locations(name, address)')
       .eq('id', id)
       .maybeSingle()
   : null;
@@ -75,6 +97,7 @@ const booking = (bookingData?.data as unknown as BookingRow | null) ?? null;
         <dl class="mt-3 grid gap-2 md:grid-cols-2">
           <div><dt class="font-medium">Reference</dt><dd>{booking.reference}</dd></div>
           <div><dt class="font-medium">Status</dt><dd>{booking.status}</dd></div>
+          <div><dt class="font-medium">Payment</dt><dd>{booking.payment_method}</dd></div>
           <div><dt class="font-medium">Tour</dt><dd>{booking.departures?.tours?.title ?? '—'}</dd></div>
           <div><dt class="font-medium">Departure (Toronto)</dt><dd>{booking.departures ? `${formatTorontoDate(booking.departures.starts_at)} ${formatTorontoTime(booking.departures.starts_at)}` : '—'}</dd></div>
           <div><dt class="font-medium">Package</dt><dd>{booking.packages?.name ?? '—'}</dd></div>

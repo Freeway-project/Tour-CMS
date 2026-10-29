@@ -36,7 +36,7 @@ const legendClass = 'text-base font-semibold text-ink';
 >
   <h2 class="text-2xl font-bold tracking-tight text-ink">Book this tour</h2>
   <p class="mt-1 text-sm text-ink/70">
-    Reserve your seats now and pay later. We will email you with the details.
+    Reserve your seats now — we will email you to confirm the details.
   </p>
 
   {packages.length === 0 ? (
@@ -756,9 +756,14 @@ const legendClass = 'text-base font-semibold text-ink';
 
         if (result.error) {
           showError(describeError(result.error));
+        } else if (result.data?.checkoutUrl) {
+          window.location.assign(result.data.checkoutUrl);
+          return;
         } else if (result.data?.reference) {
           window.location.assign(
-            `/booking/confirmed?ref=${encodeURIComponent(result.data.reference)}`,
+            `/booking/confirmed?ref=${encodeURIComponent(
+              result.data.reference,
+            )}&t=${encodeURIComponent(result.data.accessToken)}`,
           );
           return;
         } else {

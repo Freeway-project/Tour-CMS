@@ -43,6 +43,26 @@ export default defineConfig({
         access: 'secret',
         optional: true,
       }),
+      STRIPE_SECRET_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
+      STRIPE_WEBHOOK_SECRET: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
+      RESEND_API_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
+      EMAIL_FROM: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
       CF_DEPLOY_HOOK_URL: envField.string({
         context: 'server',
         access: 'secret',

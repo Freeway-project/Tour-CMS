@@ -5,6 +5,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
   "triggers": {
-    "crons": ["0 9 * * *"]
+    "crons": ["0 9 * * *", "*/15 * * * *"]
   }
 }
