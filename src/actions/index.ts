@@ -1,9 +1,9 @@
 import { ActionError, defineAction } from 'astro:actions';
 
 import { messageForDbError } from '../lib/booking-errors';
-import { sendInquiryEmails } from '../lib/booking-emails';
+import { sendInquiryEmails, sendManualBookingEmails } from '../lib/booking-emails';
 import { getAdminClient } from '../lib/db/admin';
-import { startBookingCheckout } from '../lib/stripe';
+import { isStripeConfigured, startBookingCheckout } from '../lib/stripe';
 import { bookingSchema, inquirySchema } from './schemas';
 
 /**
@@ -18,7 +18,7 @@ interface ReserveBookingRow {
   booking_id: string;
   reference: string;
   total_cents: number;
-  hold_expires_at: string;
+  hold_expires_at: string | null;
   access_token: string;
 }
 
@@ -52,6 +52,10 @@ export const server = {
         });
       }
 
+      // Without Stripe the booking is paid by hand: it keeps its seats until the
+      // owner confirms or cancels it, and the owner must hear about it at once.
+      const stripeConfigured = isStripeConfigured();
+
       const { data, error } = await admin.rpc('reserve_booking', {
         p_departure_id: input.departureId,
         p_package_id: input.packageId,
@@ -67,6 +71,7 @@ export const server = {
         p_customer_email: input.customerEmail,
         p_customer_phone: input.customerPhone,
         p_notes: input.notes && input.notes.length > 0 ? input.notes : null,
+        p_manual_payment: !stripeConfigured,
       });
 
       if (error) {
@@ -85,6 +90,12 @@ export const server = {
       // hosted Checkout page. Without it the booking stays pending and the
       // confirmation page explains that we will arrange payment.
       const checkoutUrl = await startBookingCheckout(admin, booking.booking_id, context.url.origin);
+
+      if (!stripeConfigured) {
+        // The booking would otherwise sit `pending` with nobody told about it.
+        // Failures are logged inside the email helper and never lose the booking.
+        await sendManualBookingEmails(booking.booking_id, { origin: context.url.origin });
+      }
 
       return {
         reference: booking.reference,

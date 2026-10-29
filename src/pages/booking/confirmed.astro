@@ -13,6 +13,7 @@ interface BookingRow {
   reference: string;
   access_token: string;
   status: string;
+  payment_method: string;
   hold_expires_at: string | null;
   adults: number;
   children: number;
@@ -41,7 +42,7 @@ if (reference.length > 0 && token.length > 0) {
     const { data, error } = await admin
       .from('bookings')
       .select(
-        'reference, access_token, status, hold_expires_at, adults, children, seniors, total_cents, packages(name), pickup_locations(name), departures(starts_at, tours(title, slug))',
+        'reference, access_token, status, payment_method, hold_expires_at, adults, children, seniors, total_cents, packages(name), pickup_locations(name), departures(starts_at, tours(title, slug))',
       )
       .eq('reference', reference)
       .maybeSingle();
@@ -85,15 +86,18 @@ const holdExpired = booking?.hold_expires_at
 const stripeConfigured = isStripeConfigured();
 const isPaid = booking?.status === 'paid';
 const isPending = booking?.status === 'pending';
-const isExpired = booking?.status === 'expired' || (isPending && holdExpired && stripeConfigured);
-const canCompletePayment = isPending && !holdExpired && stripeConfigured;
+// A manual booking has no Checkout hold: it stays reserved until the owner acts.
+const isManual = booking?.payment_method === 'manual';
+const isExpired =
+  booking?.status === 'expired' || (isPending && !isManual && holdExpired && stripeConfigured);
+const canCompletePayment = isPending && !isManual && !holdExpired && stripeConfigured;
 
 const title = booking
   ? isPaid
     ? 'Booking confirmed'
     : isExpired
       ? 'Reservation expired'
-      : isPending && !stripeConfigured
+      : isPending && (!stripeConfigured || isManual)
         ? 'Seats reserved'
         : isPending
           ? 'Payment not finished'
@@ -155,7 +159,7 @@ const title = booking
               </p>
             )}
           </>
-        ) : isPending && !isStripeConfigured() ? (
+        ) : isPending && (!stripeConfigured || isManual) ? (
           <>
             <p class="text-sm font-semibold tracking-widest text-brand uppercase">Seats reserved</p>
             <h1 class="mt-2 text-3xl font-bold tracking-tight text-ink">

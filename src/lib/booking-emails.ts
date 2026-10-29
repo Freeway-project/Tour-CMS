@@ -5,9 +5,12 @@ import { getSiteSettings } from './db/content';
 import { sendEmail } from './email/send';
 import {
   customerBookingConfirmation,
+  customerBookingRequestReceived,
   customerInquiryReceived,
   ownerBookingAlert,
+  ownerBookingPaymentNeeded,
   ownerInquiryAlert,
+  ownerPaymentNeedsAttention,
   type BookingEmailData,
   type InquiryEmailData,
 } from './email/templates';
@@ -125,6 +128,23 @@ function bookingEmailData(
   };
 }
 
+/** One query shape for every booking email, so the fields cannot drift apart. */
+async function loadBookingEmailRow(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<BookingEmailRow | null> {
+  const { data, error } = await admin
+    .from('bookings')
+    .select(
+      'id, reference, access_token, customer_name, customer_email, customer_phone, notes, status, adults, children, seniors, addons, subtotal_cents, tax_cents, total_cents, pickup_location_id, confirmation_email_sent_at, owner_email_sent_at, departures(tour_id, starts_at, tours(title, slug)), packages(name), pickup_locations(name, address)',
+    )
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as unknown as BookingEmailRow;
+}
+
 /**
  * Sends the customer confirmation and the owner alert for a paid booking.
  * Safe to call twice: already-sent emails are skipped.
@@ -137,18 +157,8 @@ export async function sendBookingEmails(
   if (!admin) return;
 
   try {
-    const { data, error } = await admin
-      .from('bookings')
-      .select(
-        'id, reference, access_token, customer_name, customer_email, customer_phone, notes, status, adults, children, seniors, addons, subtotal_cents, tax_cents, total_cents, pickup_location_id, confirmation_email_sent_at, owner_email_sent_at, departures(tour_id, starts_at, tours(title, slug)), packages(name), pickup_locations(name, address)',
-      )
-      .eq('id', bookingId)
-      .maybeSingle();
-
-    if (error || !data) return;
-
-    const row = data as unknown as BookingEmailRow;
-    if (!row.departures) return;
+    const row = await loadBookingEmailRow(admin, bookingId);
+    if (!row || !row.departures) return;
 
     // Only a paid booking gets a confirmation. A cancelled or refunded booking
     // that somehow reaches the webhook must not tell the customer they are booked.
@@ -180,6 +190,85 @@ export async function sendBookingEmails(
     }
   } catch (error) {
     console.error('[email] Could not send the booking emails', error);
+  }
+}
+
+/**
+ * Emails for a booking that needs payment arranged by hand (Stripe is not
+ * configured). The owner gets a `PAYMENT NEEDED` alert and the customer gets a
+ * "we've received your booking request" acknowledgement.
+ *
+ * The `*_sent_at` columns make this idempotent, exactly like the paid emails.
+ */
+export async function sendManualBookingEmails(
+  bookingId: string,
+  options: { origin: string },
+): Promise<void> {
+  const admin = getAdminClient();
+  if (!admin) return;
+
+  try {
+    const row = await loadBookingEmailRow(admin, bookingId);
+    if (!row || !row.departures) return;
+
+    // A manual booking must still be waiting for payment when these go out.
+    if (row.status !== 'pending') return;
+
+    const settings = await getSiteSettings(admin);
+    const pickupTime = await pickupTimeFor(admin, row.departures.tour_id, row.pickup_location_id);
+    const emailData = bookingEmailData(row, settings, pickupTime, options.origin, false);
+
+    if (!row.confirmation_email_sent_at && row.customer_email) {
+      const content = customerBookingRequestReceived(emailData);
+      const sent = await sendEmail({ to: row.customer_email, ...content });
+      if (sent) await markSent(admin, bookingId, 'confirmation_email_sent_at');
+    }
+
+    if (!row.owner_email_sent_at) {
+      const content = ownerBookingPaymentNeeded(emailData);
+      const sent = await notifyOwner({
+        text: content.text,
+        email: { to: settings.email, ...content },
+      });
+      if (sent) await markSent(admin, bookingId, 'owner_email_sent_at');
+    }
+  } catch (error) {
+    console.error('[email] Could not send the manual booking emails', error);
+  }
+}
+
+/**
+ * Alerts the owner that a payment arrived for a cancelled or refunded booking.
+ * The booking cannot be changed automatically, so a human has to refund or
+ * reinstate it.
+ */
+export async function sendPaymentAttentionEmail(
+  bookingId: string,
+  options: { origin: string },
+): Promise<void> {
+  const admin = getAdminClient();
+  if (!admin) return;
+
+  try {
+    const { data, error } = await admin
+      .from('bookings')
+      .select('reference')
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (error || !data) return;
+
+    const reference = (data as unknown as { reference: string }).reference;
+    const settings = await getSiteSettings(admin);
+    const content = ownerPaymentNeedsAttention({
+      settings,
+      reference,
+      adminUrl: `${options.origin}/admin/bookings/${bookingId}`,
+    });
+
+    await notifyOwner({ text: content.text, email: { to: settings.email, ...content } });
+  } catch (error) {
+    console.error('[email] Could not send the payment attention alert', error);
   }
 }
 

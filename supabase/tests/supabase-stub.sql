@@ -31,10 +31,12 @@ as $$
   select null::uuid;
 $$;
 
--- Supabase enables pgcrypto, which provides `gen_random_bytes` to migrations.
--- PGlite ships without contrib extensions, so this stand-in gives the tests the
--- same function. It is never installed in a real project.
-create or replace function public.gen_random_bytes(p_bytes integer)
+-- Supabase enables pgcrypto in the `extensions` schema. PGlite ships without
+-- contrib extensions, so this stand-in gives the tests the same function in the
+-- same schema. It is never installed in a real project.
+create schema if not exists extensions;
+
+create or replace function extensions.gen_random_bytes(p_bytes integer)
 returns bytea
 language sql
 volatile
@@ -48,6 +50,10 @@ as $$
     from 1 for p_bytes
   );
 $$;
+
+-- Supabase keeps `extensions` on the search path, which is how the unqualified
+-- `gen_random_bytes` call in `0005_payments.sql` resolves. `0006` qualifies it.
+set search_path = public, extensions;
 
 -- Supabase Storage lives in its own schema with RLS already enabled. A real
 -- project has many more columns; these are the ones the migrations touch.

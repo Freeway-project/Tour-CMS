@@ -18,13 +18,14 @@ interface ReserveOptions {
   children?: number;
   seniors?: number;
   addons?: Array<{ addon_id: string; quantity: number }>;
+  manual?: boolean;
 }
 
 interface ReserveRow {
   booking_id: string;
   reference: string;
   total_cents: number;
-  hold_expires_at: string;
+  hold_expires_at: string | null;
   access_token: string;
 }
 
@@ -35,10 +36,12 @@ interface DepartureRow {
 interface PaidRow {
   changed: boolean;
   overbooked: boolean;
+  needs_attention: boolean;
 }
 
 interface BookingRow {
   status: string;
+  payment_method: string;
   paid_at: string | null;
   stripe_checkout_session_id: string | null;
   access_token: string;
@@ -69,7 +72,7 @@ async function reserve(db: PGlite, options: ReserveOptions): Promise<ReserveRow>
     `select booking_id, reference, total_cents, hold_expires_at, access_token
      from public.reserve_booking(
        $1::uuid, $2::uuid, $3::integer, $4::integer, $5::integer,
-       $6::jsonb, $7::uuid, $8::text, $9::text, $10::text, $11::text
+       $6::jsonb, $7::uuid, $8::text, $9::text, $10::text, $11::text, $12::boolean
      )`,
     [
       options.departureId,
@@ -83,6 +86,7 @@ async function reserve(db: PGlite, options: ReserveOptions): Promise<ReserveRow>
       'guest@example.com',
       null,
       null,
+      options.manual ?? false,
     ],
   );
 
@@ -97,7 +101,7 @@ async function markPaid(
   sessionId = 'cs_test_123',
 ): Promise<PaidRow> {
   const { rows } = await db.query<PaidRow>(
-    `select changed, overbooked from public.mark_booking_paid($1, $2)`,
+    `select changed, overbooked, needs_attention from public.mark_booking_paid($1, $2)`,
     [sessionId, bookingId],
   );
 
@@ -108,7 +112,7 @@ async function markPaid(
 
 async function booking(db: PGlite, bookingId: string): Promise<BookingRow> {
   const { rows } = await db.query<BookingRow>(
-    `select status, paid_at, stripe_checkout_session_id, access_token,
+    `select status, payment_method, paid_at, stripe_checkout_session_id, access_token,
             round(extract(epoch from (hold_expires_at - created_at)) / 60)::integer as hold_minutes
      from public.bookings
      where id = $1`,
@@ -202,7 +206,7 @@ describe('payments migration', () => {
     const reserved = await reserve(db, { departureId, adults: 2 });
 
     const first = await markPaid(db, reserved.booking_id, 'cs_test_first');
-    expect(first).toEqual({ changed: true, overbooked: false });
+    expect(first).toEqual({ changed: true, overbooked: false, needs_attention: false });
 
     const stored = await booking(db, reserved.booking_id);
     expect(stored.status).toBe('paid');
@@ -210,7 +214,7 @@ describe('payments migration', () => {
     expect(stored.stripe_checkout_session_id).toBe('cs_test_first');
 
     const retry = await markPaid(db, reserved.booking_id, 'cs_test_retry');
-    expect(retry).toEqual({ changed: false, overbooked: false });
+    expect(retry).toEqual({ changed: false, overbooked: false, needs_attention: false });
 
     // The retry must not overwrite the original session id or paid time.
     const afterRetry = await booking(db, reserved.booking_id);
@@ -228,7 +232,7 @@ describe('payments migration', () => {
     );
 
     const result = await markPaid(db, reserved.booking_id);
-    expect(result).toEqual({ changed: true, overbooked: false });
+    expect(result).toEqual({ changed: true, overbooked: false, needs_attention: false });
     expect((await booking(db, reserved.booking_id)).status).toBe('paid');
   });
 
@@ -244,7 +248,7 @@ describe('payments migration', () => {
     await reserve(db, { departureId, adults: 6 });
 
     const result = await markPaid(db, reserved.booking_id);
-    expect(result).toEqual({ changed: true, overbooked: true });
+    expect(result).toEqual({ changed: true, overbooked: true, needs_attention: false });
 
     // The payment is never silently lost.
     expect((await booking(db, reserved.booking_id)).status).toBe('paid');
@@ -258,7 +262,7 @@ describe('payments migration', () => {
 
   it('returns changed = false for an unknown booking', async () => {
     const result = await markPaid(db, '00000000-0000-4000-8000-000000000000');
-    expect(result).toEqual({ changed: false, overbooked: false });
+    expect(result).toEqual({ changed: false, overbooked: false, needs_attention: false });
   });
 
   it('expires pending holds that are past their deadline', async () => {
@@ -291,8 +295,67 @@ describe('payments migration', () => {
 
     // Stripe can complete a session a moment after our hold ran out.
     const result = await markPaid(db, reserved.booking_id);
-    expect(result).toEqual({ changed: true, overbooked: false });
+    expect(result).toEqual({ changed: true, overbooked: false, needs_attention: false });
     expect((await booking(db, reserved.booking_id)).status).toBe('paid');
+  });
+
+  it('keeps a manual booking pending with no hold and its seats reserved', async () => {
+    const departureId = await firstDeparture(db);
+    const manual = await reserve(db, { departureId, adults: 2, manual: true });
+    const stored = await booking(db, manual.booking_id);
+
+    expect(stored.status).toBe('pending');
+    expect(stored.payment_method).toBe('manual');
+    expect(manual.hold_expires_at).toBeNull();
+
+    const { rows } = await db.query<{ seats_taken: number }>(
+      `select seats_taken from public.departure_availability where id = $1`,
+      [departureId],
+    );
+    expect(rows[0]?.seats_taken).toBe(2);
+  });
+
+  it('expires a Stripe hold but never a manual booking', async () => {
+    const departureId = await firstDeparture(db);
+    const stripe = await reserve(db, { departureId, adults: 2 });
+    const manual = await reserve(db, { departureId, adults: 1, manual: true });
+
+    // Pretend the 30-minute window has passed for both bookings.
+    await db.query(
+      `update public.bookings set hold_expires_at = now() - interval '1 minute'
+       where id = any ($1::uuid[])`,
+      [[stripe.booking_id, manual.booking_id]],
+    );
+
+    const { rows } = await db.query<{ expired: number }>(`select public.expire_holds() as expired`);
+    expect(rows[0]?.expired).toBe(1);
+
+    expect((await booking(db, stripe.booking_id)).status).toBe('expired');
+    expect((await booking(db, manual.booking_id)).status).toBe('pending');
+
+    // The expired Stripe hold released its seats; the manual booking still holds
+    // its own.
+    const seats = await db.query<{ seats_taken: number }>(
+      `select seats_taken from public.departure_availability where id = $1`,
+      [departureId],
+    );
+    expect(seats.rows[0]?.seats_taken).toBe(1);
+  });
+
+  it('asks for attention when a payment arrives on a cancelled or refunded booking', async () => {
+    const departureId = await firstDeparture(db);
+
+    for (const status of ['cancelled', 'refunded'] as const) {
+      const reserved = await reserve(db, { departureId, adults: 1 });
+      await db.query(`update public.bookings set status = $2 where id = $1`, [
+        reserved.booking_id,
+        status,
+      ]);
+
+      const result = await markPaid(db, reserved.booking_id);
+      expect(result).toEqual({ changed: false, overbooked: false, needs_attention: true });
+      expect((await booking(db, reserved.booking_id)).status).toBe(status);
+    }
   });
 
   it('keeps the payment functions away from anonymous and logged-in users', async () => {

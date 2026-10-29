@@ -4,10 +4,13 @@ import { siteSettings } from '../../data/fixtures';
 import { formatCad } from '../format';
 import {
   customerBookingConfirmation,
+  customerBookingRequestReceived,
   customerInquiryReceived,
   escapeHtml,
   ownerBookingAlert,
+  ownerBookingPaymentNeeded,
   ownerInquiryAlert,
+  ownerPaymentNeedsAttention,
   telHref,
   whatsappHref,
   type BookingEmailData,
@@ -140,6 +143,59 @@ describe('ownerBookingAlert', () => {
 
     expect(email.html).not.toContain('<script>');
     expect(email.html).not.toContain('<iframe');
+  });
+});
+
+describe('manual payment templates', () => {
+  it('owner alert starts with PAYMENT NEEDED and links to the admin', () => {
+    const email = ownerBookingPaymentNeeded(booking);
+
+    expect(email.subject.startsWith('PAYMENT NEEDED')).toBe(true);
+    expect(email.html).toContain(booking.adminUrl);
+    expect(email.text).toContain('No payment has been taken');
+  });
+
+  it('customer acknowledgement says no payment has been taken and links to the booking', () => {
+    const email = customerBookingRequestReceived(booking);
+
+    expect(email.subject).toContain('TN-ABC123');
+    expect(email.html).toContain(escapeHtml(booking.bookingUrl));
+    expect(email.text).toContain('No payment has been taken yet.');
+  });
+
+  it('escapes the customer name in both manual emails', () => {
+    const attack = { ...booking, customerName: '<script>alert("name")</script>' };
+
+    expect(ownerBookingPaymentNeeded(attack).html).not.toContain('<script>');
+    expect(customerBookingRequestReceived(attack).html).not.toContain('<script>');
+    expect(customerBookingRequestReceived(attack).html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('ownerPaymentNeedsAttention', () => {
+  it('names the booking and tells the owner to refund or reinstate it', () => {
+    const email = ownerPaymentNeedsAttention({
+      settings: siteSettings,
+      reference: 'TN-ABC123',
+      adminUrl: 'https://torontoniagara.ca/admin/bookings/booking-id',
+    });
+
+    expect(email.subject).toContain('TN-ABC123');
+    expect(email.text).toContain(
+      'Payment received for a cancelled booking TN-ABC123 — refund or reinstate it.',
+    );
+    expect(email.html).toContain('TN-ABC123');
+  });
+
+  it('escapes the reference', () => {
+    const email = ownerPaymentNeedsAttention({
+      settings: siteSettings,
+      reference: '<script>alert(1)</script>',
+      adminUrl: 'https://torontoniagara.ca/admin/bookings/booking-id',
+    });
+
+    expect(email.html).not.toContain('<script>');
+    expect(email.html).toContain('&lt;script&gt;');
   });
 });
 

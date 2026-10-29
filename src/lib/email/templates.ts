@@ -46,6 +46,13 @@ export interface BookingEmailData {
   overbooked?: boolean;
 }
 
+/** The owner alert for a payment that landed on a cancelled/refunded booking. */
+export interface PaymentAlertEmailData {
+  settings: SiteSettings;
+  reference: string;
+  adminUrl: string;
+}
+
 export interface InquiryEmailData {
   settings: SiteSettings;
   tourTitle: string;
@@ -313,6 +320,170 @@ export function ownerBookingAlert(data: BookingEmailData): EmailContent {
   ]
     .filter((line, index, lines) => !(line === '' && lines[index - 1] === ''))
     .join('\n');
+
+  return { subject, html, text };
+}
+
+/**
+ * Owner alert when Stripe is not configured: no payment has been taken, so the
+ * owner must arrange one. The `PAYMENT NEEDED` subject prefix makes it stand
+ * out from a normal booking alert.
+ */
+export function ownerBookingPaymentNeeded(data: BookingEmailData): EmailContent {
+  const subject = `PAYMENT NEEDED — New booking ${data.reference}: ${data.tourTitle}`;
+
+  const phone = data.customerPhone;
+  const phoneHtml = phone
+    ? `<a href="${escapeHtml(telHref(phone))}" style="color:#0f766e;">${escapeHtml(
+        phone,
+      )}</a> · <a href="${escapeHtml(whatsappHref(phone))}" style="color:#0f766e;">WhatsApp</a>`
+    : 'Not given';
+
+  const html = layout(
+    data.settings,
+    `<h1 style="${H1}">PAYMENT NEEDED — new booking</h1>
+      <p style="margin:0 0 12px;padding:12px;border-radius:8px;background-color:#fef3c7;color:#92400e;font-weight:600;">No payment has been taken. Contact the customer to arrange payment, then mark the booking paid in the admin.</p>
+      ${details([
+        ['Reference', `<strong>${escapeHtml(data.reference)}</strong>`],
+        ['Customer', escapeHtml(data.customerName)],
+        [
+          'Email',
+          `<a href="mailto:${escapeHtml(data.customerEmail)}" style="color:#0f766e;">${escapeHtml(
+            data.customerEmail,
+          )}</a>`,
+        ],
+        ['Phone', phoneHtml],
+        ['Tour', escapeHtml(`${data.tourTitle} — ${data.packageName}`)],
+        ['Date and time', escapeHtml(whenText(data.startsAt))],
+        ['People', escapeHtml(peopleSummary(data))],
+        ['Pickup', escapeHtml(pickupText(data))],
+        ['Total', `<strong>${escapeHtml(formatCad(data.totalCents))}</strong>`],
+        ['Notes', data.notes ? escapeHtml(data.notes) : '—'],
+      ])}
+      <p style="${P}">
+        <a href="${escapeHtml(data.adminUrl)}" style="${BUTTON}">Open in the admin</a>
+      </p>`,
+  );
+
+  const text = [
+    'PAYMENT NEEDED — new booking',
+    'No payment has been taken. Contact the customer to arrange payment, then mark the booking paid in the admin.',
+    '',
+    `Reference: ${data.reference}`,
+    `Customer: ${data.customerName}`,
+    `Email: ${data.customerEmail}`,
+    `Phone: ${phone ?? 'Not given'}`,
+    `Tour: ${data.tourTitle} — ${data.packageName}`,
+    `Date and time: ${whenText(data.startsAt)}`,
+    `People: ${peopleSummary(data)}`,
+    `Pickup: ${pickupText(data)}`,
+    `Total: ${formatCad(data.totalCents)}`,
+    `Notes: ${data.notes ?? '—'}`,
+    '',
+    `Admin: ${data.adminUrl}`,
+    '',
+    `${data.settings.name} · ${data.settings.address}`,
+  ].join('\n');
+
+  return { subject, html, text };
+}
+
+/**
+ * Customer acknowledgement when payment is arranged manually: the request is
+ * saved and the seats are held, but no money has changed hands yet.
+ */
+export function customerBookingRequestReceived(data: BookingEmailData): EmailContent {
+  const subject = `We've received your booking request (${data.reference})`;
+
+  const html = layout(
+    data.settings,
+    `<h1 style="${H1}">We've received your booking request</h1>
+      <p style="${P}">Hi ${escapeHtml(data.customerName)}, thank you for your booking request with ${escapeHtml(
+        data.settings.name,
+      )}. Your seats are held while we contact you to arrange payment.</p>
+      ${details([
+        ['Booking reference', `<strong>${escapeHtml(data.reference)}</strong>`],
+        ['Tour', escapeHtml(`${data.tourTitle} — ${data.packageName}`)],
+        ['Date and time', escapeHtml(whenText(data.startsAt))],
+        ['People', escapeHtml(peopleSummary(data))],
+        ['Pickup', escapeHtml(pickupText(data))],
+        ['Subtotal', escapeHtml(formatCad(data.subtotalCents))],
+        ['HST 13%', escapeHtml(formatCad(data.taxCents))],
+        ['Total including HST', `<strong>${escapeHtml(formatCad(data.totalCents))}</strong>`],
+      ])}
+      ${addonLines(data)}
+      <p style="${P}">We will contact you to arrange payment and confirm the final details. No payment has been taken yet.</p>
+      <p style="${P}">
+        <a href="${escapeHtml(data.bookingUrl)}" style="${BUTTON}">View your booking request</a>
+      </p>
+      <p style="${MUTED}">Keep this link private: it opens your booking details.</p>
+      <h2 style="${H2}">Questions?</h2>
+      ${contactBlock(data.settings)}`,
+  );
+
+  const text = [
+    `We've received your booking request`,
+    '',
+    `Hi ${data.customerName}, thank you for your booking request with ${data.settings.name}. Your seats are held while we contact you to arrange payment.`,
+    '',
+    `Booking reference: ${data.reference}`,
+    `Tour: ${data.tourTitle} — ${data.packageName}`,
+    `Date and time: ${whenText(data.startsAt)}`,
+    `People: ${peopleSummary(data)}`,
+    `Pickup: ${pickupText(data)}`,
+    `Subtotal: ${formatCad(data.subtotalCents)}`,
+    `HST 13%: ${formatCad(data.taxCents)}`,
+    `Total including HST: ${formatCad(data.totalCents)}`,
+    ...(data.addons.length > 0
+      ? [
+          '',
+          'Extras:',
+          ...data.addons.map(
+            (addon) =>
+              `- ${addon.name} × ${addon.quantity} — ${formatCad(addon.unitCents * addon.quantity)}`,
+          ),
+        ]
+      : []),
+    '',
+    'We will contact you to arrange payment and confirm the final details. No payment has been taken yet.',
+    '',
+    `View your booking request: ${data.bookingUrl}`,
+    'Keep this link private: it opens your booking details.',
+    '',
+    'Questions?',
+    `Call ${data.settings.phone}, WhatsApp ${data.settings.whatsapp}, or email ${data.settings.email}.`,
+    '',
+    `${data.settings.name} · ${data.settings.address}`,
+  ].join('\n');
+
+  return { subject, html, text };
+}
+
+/**
+ * Owner alert for a payment that arrived on a cancelled or refunded booking.
+ * The payment cannot be applied, so the owner has to refund or reinstate it.
+ */
+export function ownerPaymentNeedsAttention(data: PaymentAlertEmailData): EmailContent {
+  const subject = `Payment received for a cancelled booking ${data.reference}`;
+
+  const html = layout(
+    data.settings,
+    `<h1 style="${H1}">Payment received for a cancelled booking</h1>
+      <p style="${P}">Payment received for a cancelled booking <strong>${escapeHtml(
+        data.reference,
+      )}</strong> — refund or reinstate it.</p>
+      <p style="${P}">
+        <a href="${escapeHtml(data.adminUrl)}" style="${BUTTON}">Open in the admin</a>
+      </p>`,
+  );
+
+  const text = [
+    `Payment received for a cancelled booking ${data.reference} — refund or reinstate it.`,
+    '',
+    `Admin: ${data.adminUrl}`,
+    '',
+    `${data.settings.name} · ${data.settings.address}`,
+  ].join('\n');
 
   return { subject, html, text };
 }
