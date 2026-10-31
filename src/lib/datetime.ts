@@ -40,6 +40,12 @@ const timeFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZoneName: 'short',
 });
 
+const shortDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TORONTO_TIME_ZONE,
+  month: 'short',
+  day: 'numeric',
+});
+
 function partsRecord(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
   const record: Record<string, string> = {};
   for (const part of parts) record[part.type] = part.value;
@@ -151,6 +157,16 @@ export function formatTorontoDate(instant: string | Date): string {
 export function formatTorontoTime(instant: string | Date): string {
   const date = typeof instant === 'string' ? new Date(instant) : instant;
   return timeFormatter.format(date);
+}
+
+/**
+ * Heading for a booking-week group. The week still starts on Monday, but the
+ * label names the first date the customer can actually pick (`Week of Nov 1`)
+ * rather than a Monday that may be in the previous month.
+ */
+export function weekOfLabel(instant: string | Date): string {
+  const date = typeof instant === 'string' ? new Date(instant) : instant;
+  return `Week of ${shortDateFormatter.format(date)}`;
 }
 
 /** Validates `YYYY-MM-DD` strings coming from query parameters and forms. */

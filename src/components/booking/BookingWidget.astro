@@ -340,6 +340,7 @@ const legendClass = 'text-base font-semibold text-ink';
   import { actions, isInputError, type ActionError } from 'astro:actions';
 
   import { messageForCode, readErrorCode } from '../../lib/booking-errors';
+  import { weekOfLabel } from '../../lib/datetime';
   import { formatCad } from '../../lib/format';
   import { quote } from '../../lib/pricing';
   import type { Addon, AvailabilitySlot, Package, PickupLocation } from '../../lib/types';
@@ -364,11 +365,6 @@ const legendClass = 'text-base font-semibold text-ink';
     timeZone: TORONTO_TIME_ZONE,
     hour: 'numeric',
     minute: '2-digit',
-  });
-  const weekFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TORONTO_TIME_ZONE,
-    month: 'short',
-    day: 'numeric',
   });
 
   function isRecord(value: unknown): value is Record<string, unknown> {
@@ -430,12 +426,6 @@ const legendClass = 'text-base font-semibold text-ink';
     const daysSinceMonday = (weekday + 6) % 7;
     const monday = new Date(local.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
     return monday.toISOString().slice(0, 10);
-  }
-
-  function mondayLabel(key: string): string {
-    const [yearText, monthText, dayText] = key.split('-');
-    const monday = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText), 12));
-    return `Week of ${weekFormatter.format(monday)}`;
   }
 
   function describeError(error: ActionError): string {
@@ -662,12 +652,15 @@ const legendClass = 'text-base font-semibold text-ink';
 
       let firstRadio: HTMLInputElement | null = null;
 
-      for (const [key, weekSlots] of weeks) {
+      for (const weekSlots of weeks.values()) {
+        const firstSlot = weekSlots[0];
+        if (!firstSlot) continue;
+
         const group = document.createElement('div');
 
         const heading = document.createElement('h3');
         heading.className = 'text-sm font-semibold text-ink';
-        heading.textContent = mondayLabel(key);
+        heading.textContent = weekOfLabel(firstSlot.startsAt);
         group.append(heading);
 
         const grid = document.createElement('div');

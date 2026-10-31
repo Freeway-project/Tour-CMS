@@ -21,3 +21,14 @@ export function formatCad(cents: number): string {
 export function formatCadHeadline(cents: number): string {
   return cents % 100 === 0 ? cadWholeFormatter.format(cents / 100) : formatCad(cents);
 }
+
+/** Formats a duration in minutes, e.g. `600` → `10 hours`. */
+export function formatDuration(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.trunc(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (hours === 0) return `${remainder} minutes`;
+  if (remainder === 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'} ${remainder} minutes`;
+}

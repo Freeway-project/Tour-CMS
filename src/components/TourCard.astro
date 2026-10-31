@@ -1,0 +1,47 @@
+---
+import { formatCadHeadline, formatDuration } from '../lib/format';
+import { isPlaceholder } from '../lib/placeholder';
+import { fromPrice } from '../lib/pricing';
+import type { Tour } from '../lib/types';
+
+interface Props {
+  tour: Tour;
+}
+
+const { tour } = Astro.props;
+
+const offer = fromPrice(tour);
+const duration = formatDuration(tour.durationMinutes);
+const pickup = tour.pickups.find((entry) => entry.isActive && entry.pickupTime);
+const pickupFrom =
+  pickup && pickup.name && !isPlaceholder(pickup.name) ? ` from ${pickup.name}` : '';
+const pickupLabel = pickup?.pickupTime ? `Pickup at ${pickup.pickupTime}${pickupFrom}` : null;
+const linkText = `Book the ${tour.title}`;
+---
+
+<article class="flex h-full flex-col rounded-2xl border border-ink/10 bg-white p-5 shadow-raised sm:p-6">
+  <h3 class="text-xl font-bold tracking-tight text-ink text-balance">{tour.title}</h3>
+  <p class="mt-2 text-sm text-ink/80 text-pretty">{tour.shortDescription}</p>
+
+  <ul class="mt-4 space-y-1.5 text-sm text-ink/80">
+    <li>{duration}</li>
+    {pickupLabel ? <li>{pickupLabel}</li> : null}
+  </ul>
+
+  {offer ? (
+    <p class="mt-4 text-sm text-ink/70">
+      From{' '}
+      <strong class="text-base font-semibold text-ink">{formatCadHeadline(offer.cents)}</strong>
+      {offer.unit === 'person' ? ' per person' : ' per vehicle'}
+    </p>
+  ) : null}
+
+  <div class="mt-auto pt-5">
+    <a
+      href={`/tours/${tour.slug}/`}
+      class="inline-flex w-fit items-center rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg shadow-raised transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+    >
+      {linkText}
+    </a>
+  </div>
+</article>
