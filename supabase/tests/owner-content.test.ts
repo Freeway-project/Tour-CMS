@@ -48,21 +48,24 @@ describe('owner content (task 05)', () => {
   });
 
   it('generate_departures uses correct offsets and DST-aware times', async () => {
-    const { rows } = await db.query<{ starts_at: string }>(
-      `select starts_at from public.departures
-       where tour_id = '0a000000-0000-4000-8000-000000000001'::uuid
-         and starts_at >= '2026-10-30T00:00:00Z' and starts_at < '2026-10-31T00:00:00Z'`,
-    );
-    expect(rows).toHaveLength(1);
-    expect(String(rows[0]!.starts_at)).toContain('12:00:00');
+    // Generation starts from today, so fixed dates go stale. A year ahead always
+    // spans both a daylight-time and a standard-time stretch in Toronto.
+    await db.query(`select public.generate_departures(400)`);
 
-    const { rows: rows2 } = await db.query<{ starts_at: string }>(
-      `select starts_at from public.departures
+    const { rows } = await db.query<{ local_time: string; utc_hour: number }>(
+      `select distinct
+         to_char(starts_at at time zone 'America/Toronto', 'HH24:MI') as local_time,
+         extract(hour from starts_at at time zone 'UTC')::integer as utc_hour
+       from public.departures
        where tour_id = '0a000000-0000-4000-8000-000000000001'::uuid
-         and starts_at >= '2026-11-02T00:00:00Z' and starts_at < '2026-11-03T00:00:00Z'`,
+       order by utc_hour`,
     );
-    expect(rows2).toHaveLength(1);
-    expect(String(rows2[0]!.starts_at)).toContain('13:00:00');
+    // The 08:00 schedule stays 08:00 on the wall clock all year: 12:00 UTC in
+    // daylight time (UTC-4), 13:00 UTC in standard time (UTC-5).
+    expect(rows).toEqual([
+      { local_time: '08:00', utc_hour: 12 },
+      { local_time: '08:00', utc_hour: 13 },
+    ]);
   });
 
   it('generate_departures is idempotent and does not touch existing departures', async () => {

@@ -4,11 +4,13 @@ export const prerender = true;
 import BookingWidget from '../../components/booking/BookingWidget.astro';
 import InquiryForm from '../../components/booking/InquiryForm.astro';
 import Button from '../../components/Button.astro';
+import FaqList from '../../components/FaqList.astro';
 import Base from '../../layouts/Base.astro';
 import { getTours } from '../../lib/db/catalog';
 import { getFaqs, getReviews, getSiteSettings } from '../../lib/db/content';
-import { formatCad, formatCadHeadline } from '../../lib/format';
+import { formatCad, formatCadHeadline, formatDuration } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
+import { isPlaceholder } from '../../lib/placeholder';
 import { fromPrice } from '../../lib/pricing';
 import type { Tour } from '../../lib/types';
 import '../../styles/global.css';
@@ -41,45 +43,30 @@ const activePackages = tour.packages.filter((pkg) => pkg.isActive);
 const pickups = tour.pickups.filter((pickup) => pickup.isActive);
 const lowest = fromPrice(tour);
 
-const ratedPlatforms = site.ratings.filter((rating) => rating.count > 0);
+// Only verified platform totals count. A rating with no reviews is a placeholder,
+// even if a score was typed in, and must not reach visitors or JSON-LD.
+const ratedPlatforms = site.ratings.filter(
+  (rating) => !isPlaceholder(rating.platform) && !isPlaceholder(rating.url) && rating.count > 0,
+);
 const totalReviews = ratedPlatforms.reduce((sum, rating) => sum + rating.count, 0);
 const averageRating =
   totalReviews > 0
     ? ratedPlatforms.reduce((sum, rating) => sum + rating.score * rating.count, 0) / totalReviews
-    : site.ratings.length > 0
-      ? site.ratings.reduce((sum, rating) => sum + rating.score, 0) / site.ratings.length
-      : null;
-const firstPlatform = site.ratings[0];
+    : null;
 
-// Google rejects an `AggregateRating` with `reviewCount: 0`, so prefer the platform
-// totals once the owner has filled them in and otherwise fall back to the guest
-// reviews published on this site.
+// Google rejects an `AggregateRating` with `reviewCount: 0`, so omit it entirely
+// until the owner has published verified platform totals.
 const structuredRating =
   totalReviews > 0 && averageRating !== null
     ? { ratingValue: averageRating, reviewCount: totalReviews }
-    : allReviews.length > 0
-      ? {
-          ratingValue:
-            allReviews.reduce((sum, entry) => sum + entry.rating, 0) / allReviews.length,
-          reviewCount: allReviews.length,
-        }
-      : null;
+    : null;
 
 const ratingSummary =
   totalReviews > 0 && averageRating !== null
     ? `${averageRating.toFixed(1)} average from ${totalReviews.toLocaleString('en-CA')} guest reviews`
-    : firstPlatform
-      ? `Rated ${firstPlatform.score} on ${firstPlatform.platform}`
-      : null;
+    : null;
 
-const hours = Math.floor(tour.durationMinutes / 60);
-const minutes = tour.durationMinutes % 60;
-const duration =
-  hours === 0
-    ? `${minutes} minutes`
-    : minutes === 0
-      ? `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-      : `${hours} ${hours === 1 ? 'hour' : 'hours'} ${minutes} minutes`;
+const duration = formatDuration(tour.durationMinutes);
 
 const description = tour.shortDescription.slice(0, 158);
 const title = `${tour.title} | ${site.name}`;
@@ -268,24 +255,7 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
       </section>
     ) : null}
 
-    {faqs.length > 0 ? (
-      <section class="mt-12" aria-labelledby="faq-heading">
-        <h2 id="faq-heading" class="text-2xl font-bold tracking-tight text-ink">
-          Frequently asked questions
-        </h2>
-        <div class="mt-4 space-y-2">
-          {faqs.map((faq) => (
-            <details class="rounded-xl border border-ink/10 bg-white p-4">
-              <summary class="cursor-pointer font-medium text-ink">{faq.question}</summary>
-              <div
-                class="mt-2 space-y-3 text-sm text-ink/80"
-                set:html={renderMarkdown(faq.answer)}
-              />
-            </details>
-          ))}
-        </div>
-      </section>
-    ) : null}
+    <FaqList faqs={faqs} />
   </main>
 
   <div
