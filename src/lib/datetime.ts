@@ -159,6 +159,11 @@ export function formatTorontoTime(instant: string | Date): string {
   return timeFormatter.format(date);
 }
 
+/** `2026-10-28T12:00:00Z` → `Wed, October 28, 2026, 8:00 a.m. EDT`, always Toronto time. */
+export function formatTorontoDateTime(instant: string | Date): string {
+  return `${formatTorontoDate(instant)}, ${formatTorontoTime(instant)}`;
+}
+
 /**
  * Heading for a booking-week group. The week still starts on Monday, but the
  * label names the first date the customer can actually pick (`Week of Nov 1`)

@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 
+import { formatTorontoDateTime } from '../../lib/datetime';
 import { scheduleSchema, blackoutDateSchema, departureCapacitySchema, oneOffDepartureSchema, fieldErrors } from '../../lib/admin-schemas';
 import { triggerPublish } from '../../lib/publish';
 import Admin from '../../layouts/Admin.astro';
@@ -203,7 +204,7 @@ await loadData();
       {departures.map((d) => (
         <li class="rounded border border-ink/10 p-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span>{d.tour_title} — {new Date(d.starts_at).toLocaleString('en-CA')} — {d.seats_left}/{d.capacity} seats left — {d.status}</span>
+            <span>{d.tour_title} — {formatTorontoDateTime(d.starts_at)} — {d.seats_left}/{d.capacity} seats left — {d.status}</span>
           </div>
           <div class="mt-2 flex flex-wrap gap-2">
             <form method="post" class="flex items-center gap-2">

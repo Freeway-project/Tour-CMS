@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { bookingNotesSchema, fieldErrors } from '../../../lib/admin-schemas';
-import { formatTorontoDate, formatTorontoTime } from '../../../lib/datetime';
+import { formatTorontoDate, formatTorontoDateTime, formatTorontoTime } from '../../../lib/datetime';
 import Admin from '../../../layouts/Admin.astro';
 
 const supabase = Astro.locals.supabase;
@@ -106,8 +106,8 @@ const booking = (bookingData?.data as unknown as BookingRow | null) ?? null;
           <div><dt class="font-medium">Subtotal</dt><dd>${(booking.subtotal_cents / 100).toFixed(2)}</dd></div>
           <div><dt class="font-medium">HST</dt><dd>${(booking.tax_cents / 100).toFixed(2)}</dd></div>
           <div><dt class="font-medium">Total</dt><dd>${(booking.total_cents / 100).toFixed(2)} {booking.currency}</dd></div>
-          <div><dt class="font-medium">Booked at</dt><dd>{new Date(booking.created_at).toLocaleString('en-CA')}</dd></div>
-          {booking.hold_expires_at ? <div><dt class="font-medium">Hold expires</dt><dd>{new Date(booking.hold_expires_at).toLocaleString('en-CA')}</dd></div> : null}
+          <div><dt class="font-medium">Booked at</dt><dd>{formatTorontoDateTime(booking.created_at)}</dd></div>
+          {booking.hold_expires_at ? <div><dt class="font-medium">Hold expires</dt><dd>{formatTorontoDateTime(booking.hold_expires_at)}</dd></div> : null}
         </dl>
       </section>
 
