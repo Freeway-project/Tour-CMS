@@ -23,12 +23,14 @@ create table if not exists auth.users (
   id uuid primary key
 );
 
+-- Like Supabase, read the signed-in user from the request's JWT claims; tests
+-- set `request.jwt.claim.sub` to act as a user. Unset means anonymous.
 create or replace function auth.uid()
 returns uuid
 language sql
 stable
 as $$
-  select null::uuid;
+  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
 -- Supabase enables pgcrypto in the `extensions` schema. PGlite ships without

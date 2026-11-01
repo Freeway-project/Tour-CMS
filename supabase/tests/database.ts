@@ -15,6 +15,7 @@ const MIGRATIONS = [
   '0004_admin_functions.sql',
   '0005_payments.sql',
   '0006_payment_fixes.sql',
+  '0007_admin_table_grants.sql',
 ];
 
 async function readSql(relativePath: string): Promise<string> {
