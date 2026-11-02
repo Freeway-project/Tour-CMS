@@ -2,6 +2,7 @@
 import { heroImage } from '../lib/photos';
 import { tourFacts, tourInclusions } from '../lib/tour-facts';
 import type { Tour } from '../lib/types';
+import Icon from './Icon.astro';
 import Photo from './Photo.astro';
 
 interface Props {
@@ -11,43 +12,72 @@ interface Props {
 const { tour } = Astro.props;
 const facts = tourFacts(tour);
 const photo = heroImage(tour.images) ?? tour.images[0] ?? null;
-const inclusions = tourInclusions(tour).slice(0, 3);
+const inclusions = tourInclusions(tour).slice(0, 4);
+const href = `/tours/${tour.slug}/`;
 ---
 
-<article class="flex h-full flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-raised">
-  {photo ? (
-    <Photo photo={photo} sizes="(min-width: 640px) 50vw, 100vw" widths={[480, 800, 1200]} class="aspect-[3/2] w-full object-cover" />
-  ) : (
-    <div class="aspect-[3/2] w-full bg-brand/10" aria-hidden="true"></div>
-  )}
-  <div class="flex flex-1 flex-col p-5 sm:p-6">
-    <h3 class="text-xl font-bold tracking-tight text-ink text-balance">{tour.title}</h3>
-    <p class="mt-2 text-sm text-ink/80 text-pretty">{tour.shortDescription}</p>
+<article class="group relative flex h-full flex-col overflow-hidden rounded-card border border-ink/10 bg-white shadow-raised transition duration-200 hover:-translate-y-1 hover:shadow-lift motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+  <div class="relative aspect-[16/10] overflow-hidden bg-brand">
+    {photo ? (
+      <Photo
+        photo={photo}
+        sizes="(min-width: 1200px) 568px, (min-width: 768px) 50vw, 100vw"
+        widths={[480, 800, 1200]}
+        class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+      />
+    ) : (
+      <div class="grid h-full w-full place-items-center bg-linear-to-br from-brand to-brand-deep text-accent" aria-hidden="true">
+        <Icon name="falls" class="h-14 w-14" />
+      </div>
+    )}
+    <p class="absolute top-4 left-4 rounded-pill bg-white/95 px-3 py-1 text-xs font-semibold text-brand">
+      {tour.isPrivate ? 'Private tour' : 'Day tour'}
+    </p>
+  </div>
 
-    <ul class="mt-4 space-y-1 text-sm text-ink/80">
-      {facts.guests ? <li class="font-medium text-ink">{facts.guests}</li> : null}
-      <li>{facts.duration}</li>
-      {facts.pickup ? <li>{facts.pickup}</li> : null}
-    </ul>
+  <div class="flex flex-1 flex-col p-6 lg:p-8">
+    <h3 class="heading-card">{tour.title}</h3>
+    <p class="mt-2 text-sm text-ink/75 text-pretty lg:text-base">{tour.shortDescription}</p>
+
+    <dl class="mt-6 grid gap-3 border-y border-ink/10 py-5 text-sm">
+      <div class="flex items-center gap-3">
+        <dt class="flex items-center gap-2 text-ink/70"><Icon name="clock" class="h-4 w-4 text-teal" /><span class="sr-only">Duration</span></dt>
+        <dd>{facts.duration}</dd>
+      </div>
+      {facts.guests ? (
+        <div class="flex items-center gap-3">
+          <dt class="flex items-center gap-2 text-ink/70"><Icon name="users" class="h-4 w-4 text-teal" /><span class="sr-only">Group size</span></dt>
+          <dd>{facts.guests}</dd>
+        </div>
+      ) : null}
+      {facts.pickup ? (
+        <div class="flex items-center gap-3">
+          <dt class="flex items-center gap-2 text-ink/70"><Icon name="pin" class="h-4 w-4 text-teal" /><span class="sr-only">Pickup</span></dt>
+          <dd>{facts.pickup}</dd>
+        </div>
+      ) : null}
+    </dl>
 
     {inclusions.length > 0 ? (
-      <ul class="mt-4 space-y-1 text-sm text-ink/80">
+      <ul class="mt-5 grid gap-2 text-sm text-ink/85 sm:grid-cols-2">
         {inclusions.map((item) => (
-          <li class="flex gap-2"><span aria-hidden="true" class="font-semibold text-brand">✓</span><span>{item}</span></li>
+          <li class="flex gap-2"><Icon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-teal" />{item}</li>
         ))}
       </ul>
     ) : null}
 
-    <div class="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
+    <div class="mt-auto flex flex-wrap items-end justify-between gap-4 pt-7">
       {facts.price ? (
-        <p class="text-sm text-ink/70">
-          From <span class="block text-2xl font-bold text-ink">{facts.price}</span>
-          <span class="text-xs">{facts.priceUnit}</span>
+        <p class="leading-tight">
+          <span class="text-xs text-ink/70">From</span>
+          <span class="font-display block text-[1.75rem] font-bold tracking-tight text-brand">{facts.price}</span>
+          <span class="text-xs text-ink/70">{facts.priceUnit}</span>
         </p>
       ) : null}
-      <a href={`/tours/${tour.slug}/`} class="inline-flex items-center rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-        See the {tour.isPrivate ? 'private tour' : 'day tour'}
+      <a href={href} class="btn-primary text-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal">
+        View {tour.isPrivate ? 'private tour' : 'day tour'}
         <span class="sr-only">: {tour.title}</span>
+        <Icon name="arrow" class="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
       </a>
     </div>
   </div>

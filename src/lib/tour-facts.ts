@@ -43,3 +43,16 @@ export function tourInclusions(tour: Tour): string[] {
   }
   return items;
 }
+
+const CRUISE = /\b(boat|cruise)\b/i;
+
+/**
+ * Whether the boat cruise is included, only when the data says so: an active
+ * package lists it (included) or the tour's "not included" list names it
+ * (not included). Anything else is `null`: unknown, never assumed.
+ */
+export function boatCruiseStatus(tour: Tour): 'included' | 'not-included' | null {
+  if (tourInclusions(tour).some((item) => CRUISE.test(item))) return 'included';
+  if (tour.excludes.some((item) => !isPlaceholder(item) && CRUISE.test(item))) return 'not-included';
+  return null;
+}

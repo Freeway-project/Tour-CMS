@@ -1,28 +1,35 @@
 ---
 import { renderMarkdown } from '../lib/markdown';
 import type { Faq } from '../lib/types';
+import Icon from './Icon.astro';
+import SectionHeading from './SectionHeading.astro';
 
 interface Props {
   faqs: Faq[];
   heading?: string;
   id?: string;
+  /** `split`: heading left, questions right (home). `stacked`: one column (tour page). */
+  layout?: 'split' | 'stacked';
+  class?: string;
 }
 
-const { faqs, heading = 'Frequently asked questions', id = 'faq-heading' } = Astro.props;
+const { faqs, heading = 'Frequently asked questions', id = 'faq-heading', layout = 'split', class: className } = Astro.props;
 ---
 
 {faqs.length > 0 ? (
-  <section class="mt-12" aria-labelledby={id}>
-    <h2 id={id} class="text-2xl font-bold tracking-tight text-ink">
-      {heading}
-    </h2>
-    <div class="mt-4 space-y-2">
+  <section class:list={['grid gap-8', layout === 'split' && 'lg:grid-cols-[1fr_1.6fr] lg:gap-16', className]} aria-labelledby={id}>
+    <SectionHeading id={id} title={heading} />
+    <div class="divide-y divide-ink/10 border-y border-ink/10">
       {faqs.map((faq) => (
-        <details class="rounded-xl border border-ink/10 bg-white p-4">
-          <summary class="cursor-pointer font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-            {faq.question}
+        <details class="faq group">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-5 font-display text-base font-semibold text-brand transition-colors duration-150 hover:text-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal lg:text-lg [&::-webkit-details-marker]:hidden">
+            <span>{faq.question}</span>
+            <span class="relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink/15 text-teal transition duration-200 group-open:rotate-180 group-open:border-teal motion-reduce:transition-none">
+              <Icon name="plus" class="h-4 w-4 group-open:hidden" />
+              <Icon name="minus" class="hidden h-4 w-4 group-open:block" />
+            </span>
           </summary>
-          <div class="mt-2 space-y-3 text-sm text-ink/80" set:html={renderMarkdown(faq.answer)} />
+          <div class="space-y-3 pr-12 pb-6 text-ink/80 [&_a]:font-medium [&_a]:text-teal [&_a]:underline" set:html={renderMarkdown(faq.answer)} />
         </details>
       ))}
     </div>

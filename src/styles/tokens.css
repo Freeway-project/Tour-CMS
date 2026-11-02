@@ -5,8 +5,15 @@
  * (src/styles/global.css) because Tailwind 4 only generates utilities from
  * `@theme` in the stylesheet the app imports. The tokens below are shape
  * tokens, which every page inherits by importing this file.
+ *
+ * Radii: cards 18px, buttons 12px, inputs 10px. Shadows are restrained.
  */
 @theme {
   --radius-pill: 9999px;
-  --shadow-raised: 0 1px 2px rgb(18 33 27 / 0.08), 0 8px 24px rgb(18 33 27 / 0.08);
+  --radius-card: 1.125rem;
+  --radius-btn: 0.75rem;
+  --radius-input: 0.625rem;
+  --shadow-raised: 0 1px 2px rgb(20 62 58 / 0.05), 0 8px 24px -12px rgb(20 62 58 / 0.16);
+  --shadow-lift: 0 2px 4px rgb(20 62 58 / 0.06), 0 18px 40px -16px rgb(20 62 58 / 0.28);
+  --container-site: 75rem;
 }

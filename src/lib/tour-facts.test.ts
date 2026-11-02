@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { tours } from '../data/fixtures';
-import { tourFacts, tourInclusions } from './tour-facts';
+import { boatCruiseStatus, tourFacts, tourInclusions } from './tour-facts';
 
 const shared = tours.find((tour) => !tour.isPrivate)!;
 const priv = tours.find((tour) => tour.isPrivate)!;
@@ -39,5 +39,26 @@ describe('tourInclusions', () => {
     expect(items[0]).toBe('Floral Clock');
     expect(items).not.toContain('TODO: lunch');
     expect(new Set(items).size).toBe(items.length);
+  });
+});
+
+describe('boatCruiseStatus', () => {
+  const withData = (includes: string[], excludes: string[]) => ({
+    ...shared,
+    packages: shared.packages.map((pkg) => ({ ...pkg, isActive: true, includes })),
+    excludes,
+  });
+
+  it('is included only when an active package lists it', () => {
+    expect(boatCruiseStatus(withData(['Floral Clock', 'Niagara City Cruises boat ride'], []))).toBe('included');
+  });
+
+  it('is not included only when the exclusions name it', () => {
+    expect(boatCruiseStatus(withData(['Floral Clock'], ['Boat cruise tickets']))).toBe('not-included');
+  });
+
+  it('is unknown otherwise, and placeholders do not count', () => {
+    expect(boatCruiseStatus(withData(['Floral Clock'], []))).toBeNull();
+    expect(boatCruiseStatus(withData(['TODO: boat cruise'], ['TODO: cruise']))).toBeNull();
   });
 });

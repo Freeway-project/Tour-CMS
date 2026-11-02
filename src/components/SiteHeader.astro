@@ -1,18 +1,113 @@
 ---
+import type { NavLink } from '../lib/home-nav';
+import Icon from './Icon.astro';
+
+/**
+ * Sticky header. With `overlay` it starts transparent over the hero and turns
+ * solid evergreen as the page scrolls (CSS scroll-driven animation; browsers
+ * without it get the solid header). Mobile menu: `<details>` drawer, works
+ * without JS; one tiny inline script only closes it after a link tap or Escape.
+ */
 interface Props {
   siteName: string;
+  nav: NavLink[];
+  overlay?: boolean;
 }
 
-const { siteName } = Astro.props;
+const { siteName, nav, overlay = false } = Astro.props;
+const desktopLink =
+  'relative rounded-md px-3 py-2 text-sm font-medium text-white/85 transition-colors duration-150 hover:text-white after:absolute after:inset-x-3 after:bottom-1 after:h-px after:origin-left after:scale-x-0 after:bg-accent after:transition-transform after:duration-200 hover:after:scale-x-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:after:transition-none';
 ---
 
-<header class="border-b border-ink/10 bg-white">
-  <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-5 sm:px-6">
-    <a href="/" class="truncate text-base font-semibold text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-      {siteName}
+<header class:list={['site-header sticky top-0 z-40 text-white', overlay ? 'site-header--overlay' : 'bg-brand']}>
+  <div class="container-site relative flex h-18 items-center justify-between gap-4">
+    <a
+      href="/"
+      class="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+    >
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-btn border border-white/25 text-accent">
+        <Icon name="falls" class="h-5 w-5" />
+      </span>
+      <span class="font-display truncate text-base font-bold tracking-tight sm:text-lg">{siteName}</span>
     </a>
-    <a href="/#tours" class="shrink-0 text-sm font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-      Tours
-    </a>
+
+    {nav.length > 0 ? (
+      <>
+        <nav aria-label="Main" class="hidden lg:block">
+          <ul class="flex items-center gap-1">
+            {nav.map((link) => (
+              <li><a href={link.href} class={desktopLink}>{link.label}</a></li>
+            ))}
+          </ul>
+        </nav>
+
+        <details class="site-drawer group lg:hidden">
+          <summary
+            class="grid h-11 w-11 cursor-pointer list-none place-items-center rounded-btn border border-white/25 transition-colors duration-150 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden"
+            aria-label="Menu"
+          >
+            <Icon name="menu" class="h-5 w-5 group-open:hidden" />
+            <Icon name="x" class="hidden h-5 w-5 group-open:block" />
+          </summary>
+          <nav aria-label="Main" class="absolute inset-x-0 top-full border-t border-white/10 bg-brand px-5 pt-2 pb-6 shadow-lift sm:px-8">
+            <ul class="divide-y divide-white/10">
+              {nav.map((link) => (
+                <li>
+                  <a
+                    href={link.href}
+                    class="flex items-center justify-between py-4 text-lg font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    {link.label}<Icon name="arrow" class="h-5 w-5 text-accent" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </details>
+      </>
+    ) : null}
   </div>
 </header>
+
+{nav.length > 0 ? (
+  <script is:inline>
+    // Close the mobile drawer after an in-page link tap or Escape (it is a <details>, open without JS).
+    document.querySelectorAll('.site-drawer').forEach(function (d) {
+      d.addEventListener('click', function (e) { if (e.target.closest('a')) d.open = false; });
+      d.addEventListener('keydown', function (e) { if (e.key === 'Escape' && d.open) { d.open = false; d.querySelector('summary').focus(); } });
+    });
+  </script>
+) : null}
+
+<style>
+  .site-header {
+    transition: box-shadow 200ms ease;
+  }
+  /* Fallback: solid. Browsers with scroll-driven animations start transparent. */
+  .site-header--overlay {
+    background-color: var(--color-brand);
+  }
+  @supports (animation-timeline: scroll()) {
+    .site-header--overlay {
+      background-color: transparent;
+      animation: header-solid linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 160px;
+    }
+    /* An open drawer always gets the solid bar. */
+    .site-header--overlay:has(.site-drawer[open]) {
+      animation: none;
+      background-color: var(--color-brand);
+    }
+  }
+  @keyframes header-solid {
+    from {
+      background-color: transparent;
+      box-shadow: none;
+    }
+    to {
+      background-color: var(--color-brand);
+      box-shadow: 0 1px 0 rgb(255 255 255 / 0.08), 0 8px 24px -16px rgb(0 0 0 / 0.5);
+    }
+  }
+</style>

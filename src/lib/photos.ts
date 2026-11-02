@@ -42,3 +42,35 @@ export function parseStoredPhoto(value: unknown, supabaseUrl: string | undefined
 export function heroImage<T extends { isHero: boolean }>(images: T[]): T | null {
   return images.find((image) => image.isHero) ?? null;
 }
+
+/** Most photos a hero slideshow cycles through (one CSS keyframe set per count). */
+export const MAX_SLIDES = 6;
+
+/**
+ * Photos for a hero slideshow built from several tours: the hero image of
+ * each tour first (in tour order), then every other image by `sortOrder`.
+ * Duplicates are dropped: the same `src`, or the same non-empty alt text (the
+ * same photo uploaded to two tours gets two storage paths but one
+ * description). The list is capped at `max`.
+ */
+export function slideshowPhotos<T extends { src: string; alt: string; isHero: boolean; sortOrder: number }>(
+  imageSets: T[][],
+  max: number = MAX_SLIDES,
+): T[] {
+  const sorted = imageSets.map((images) => [...images].sort((a, b) => a.sortOrder - b.sortOrder));
+  const heroes = sorted.map((images) => heroImage(images)).filter((image): image is T => image !== null);
+  const rest = sorted.flatMap((images) => images.filter((image) => !image.isHero));
+
+  const seenSrc = new Set<string>();
+  const seenAlt = new Set<string>();
+  const result: T[] = [];
+  for (const image of [...heroes, ...rest]) {
+    const alt = image.alt.trim().toLowerCase();
+    if (seenSrc.has(image.src) || (alt !== '' && seenAlt.has(alt))) continue;
+    seenSrc.add(image.src);
+    if (alt !== '') seenAlt.add(alt);
+    result.push(image);
+    if (result.length >= max) break;
+  }
+  return result;
+}

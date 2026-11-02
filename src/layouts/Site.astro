@@ -2,7 +2,10 @@
 import AnnouncementBar from '../components/AnnouncementBar.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
+import type { NavLink } from '../lib/home-nav';
 import type { SiteSettings, Tour } from '../lib/types';
+import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
+import manropeLatin from '@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2?url';
 import '../styles/global.css';
 import Base from './Base.astro';
 
@@ -17,15 +20,38 @@ interface Props {
   tours: Tour[];
   noindex?: boolean;
   footerClass?: string;
+  /** Header links (home sections that render). Default: Tours only. */
+  nav?: NavLink[];
+  /** The page opens with a full-bleed hero: the header starts transparent over it. */
+  overlayHeader?: boolean;
 }
 
-const { title, description, site, tours, noindex = false, footerClass } = Astro.props;
+const { title, description, site, tours, noindex = false, footerClass, nav, overlayHeader = false } = Astro.props;
+const headerNav = nav ?? (tours.some((tour) => tour.status !== 'hidden') ? [{ href: '/#tours', label: 'Tours' }] : []);
+
+const LATIN =
+  'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD';
+const fontFaces = [
+  ['Manrope Variable', manropeLatin, '200 800'],
+  ['Inter Variable', interLatin, '100 900'],
+]
+  .map(
+    ([family, url, weight]) =>
+      `@font-face{font-family:'${family}';font-style:normal;font-display:swap;font-weight:${weight};src:url(${url}) format('woff2-variations');unicode-range:${LATIN};}`,
+  )
+  .join('');
 ---
 
 <Base title={title} description={description} siteName={site.name} noindex={noindex}>
-  <slot name="head" slot="head" />
+  <Fragment slot="head">
+    {/* Both faces are above the fold (Manrope: headings, Inter: body). Latin subset only, one variable file each. */}
+    <link rel="preload" href={manropeLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin />
+    <style set:html={fontFaces}></style>
+    <slot name="head" />
+  </Fragment>
   <AnnouncementBar announcement={site.announcement} />
-  <SiteHeader siteName={site.name} />
+  <SiteHeader siteName={site.name} nav={headerNav} overlay={overlayHeader} />
   <slot />
   <SiteFooter site={site} tours={tours} class={footerClass} />
 </Base>

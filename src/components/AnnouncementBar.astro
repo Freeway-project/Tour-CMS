@@ -12,10 +12,10 @@ const href = announcement.href && !isPlaceholder(announcement.href) ? announceme
 ---
 
 {show ? (
-  <div class="bg-brand text-bg">
-    <p class="mx-auto w-full max-w-5xl px-5 py-2 text-center text-sm font-medium sm:px-6">
+  <div class="bg-brand-deep text-white">
+    <p class="mx-auto w-full max-w-[75rem] px-5 py-2 text-center text-sm font-medium sm:px-8">
       {href ? (
-        <a href={href} class="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bg">
+        <a href={href} class="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white decoration-accent">
           {announcement.text}
         </a>
       ) : (

@@ -1,18 +1,23 @@
 ---
 export const prerender = true;
 
-import DayTimeline from '../components/DayTimeline.astro';
 import FaqList from '../components/FaqList.astro';
 import GuideVehicle from '../components/GuideVehicle.astro';
 import HeroBanner from '../components/HeroBanner.astro';
+import Icon, { type IconName } from '../components/Icon.astro';
+import Photo from '../components/Photo.astro';
+import ReviewList from '../components/ReviewList.astro';
+import SectionHeading from '../components/SectionHeading.astro';
 import TourCard from '../components/TourCard.astro';
 import Site from '../layouts/Site.astro';
 import { getTours } from '../lib/db/catalog';
 import { getFaqs, getReviews, getSiteSettings } from '../lib/db/content';
-import { heroImage } from '../lib/photos';
+import { homeNav, homeSections } from '../lib/home-nav';
+import { slideshowPhotos } from '../lib/photos';
 import { isPlaceholder } from '../lib/placeholder';
 import { hasPolicy } from '../lib/policies';
-import { tourFacts } from '../lib/tour-facts';
+import { boatCruiseStatus, tourFacts } from '../lib/tour-facts';
+import { HERO_SLIDESHOW } from '../lib/ui-settings';
 
 const [site, tours, faqs, allReviews] = await Promise.all([
   getSiteSettings(),
@@ -24,144 +29,225 @@ const [site, tours, faqs, allReviews] = await Promise.all([
 const visibleTours = tours.filter((tour) => tour.status !== 'hidden');
 // The tour the banner sells: the first shared tour, else the first tour.
 const mainTour = visibleTours.find((tour) => !tour.isPrivate) ?? visibleTours[0] ?? null;
-const privateTour = visibleTours.find((tour) => tour.isPrivate && tour !== mainTour) ?? null;
+const otherTours = visibleTours.filter((tour) => tour !== mainTour);
 const mainFacts = mainTour ? tourFacts(mainTour) : null;
-const privateFacts = privateTour ? tourFacts(privateTour) : null;
 const freeCancellation = hasPolicy(site, 'cancellationPolicy');
+const bookableOnline = visibleTours.some((tour) => !tour.isPrivate && tour.packages.some((pkg) => pkg.isActive));
 
-const bannerPhoto =
-  (mainTour && (heroImage(mainTour.images) ?? mainTour.images[0])) ??
-  visibleTours.flatMap((tour) => tour.images)[0] ??
-  null;
+// Hero: the main tour's hero image first, then every other tour photo (deduplicated).
+const tourPhotos = slideshowPhotos([mainTour?.images ?? [], ...otherTours.map((tour) => tour.images)]);
+const sections = homeSections(tours, allReviews, faqs);
 
 const heading = isPlaceholder(site.tagline) ? 'Niagara Falls tours from Toronto' : site.tagline;
-const bannerFacts = [
-  mainFacts?.guests,
-  mainFacts?.duration,
-  mainFacts?.pickup,
-  freeCancellation ? 'Free cancellation' : null,
-].filter((fact): fact is string => Boolean(fact));
+
+type Fact = { text: string; icon: IconName };
+const fact = (text: string | null | undefined, icon: IconName): Fact | null => (text ? { text, icon } : null);
+const isFact = (item: Fact | null): item is Fact => item !== null;
+
+const heroFacts = [
+  fact(mainFacts?.guests, 'users'),
+  fact(mainFacts?.duration, 'clock'),
+  fact(freeCancellation ? 'Free cancellation' : null, 'shield'),
+].filter(isFact);
 
 const trust = [
-  mainFacts?.guests ?? null,
-  'The price you see includes HST',
-  mainTour && !mainTour.isPrivate ? 'Book online, pick your date and seats' : null,
-  freeCancellation ? 'Free cancellation' : null,
-].filter((item): item is string => Boolean(item));
+  fact(mainFacts?.guests, 'users'),
+  fact('Every price includes HST', 'receipt'),
+  fact(bookableOnline ? 'Live availability, book online' : null, 'calendar'),
+  fact(freeCancellation ? 'Free cancellation' : null, 'shield'),
+]
+  .filter(isFact)
+  .slice(0, 4);
 
-const comparison =
-  visibleTours.length >= 2
-    ? visibleTours.map((tour) => ({ tour, facts: tourFacts(tour) }))
-    : [];
+const comparison = visibleTours.length >= 2 ? visibleTours.map((tour) => ({ tour, facts: tourFacts(tour), cruise: boatCruiseStatus(tour) })) : [];
+const showCruise = comparison.some((entry) => entry.cruise !== null);
+const cruiseText = { included: 'Included', 'not-included': 'Not included' } as const;
+const rows = comparison.length
+  ? [
+      { label: 'Price incl. HST', icon: 'receipt' as const, values: comparison.map(({ facts }) => (facts.price ? `From ${facts.price} ${facts.priceUnit?.replace(', including HST', '') ?? ''}`.trim() : 'On request')) },
+      { label: 'Group', icon: 'users' as const, values: comparison.map(({ tour, facts }) => (tour.isPrivate ? `Just your group${facts.guests ? `, ${facts.guests.toLowerCase()}` : ''}` : (facts.guests ?? 'Shared tour'))) },
+      { label: 'Duration', icon: 'clock' as const, values: comparison.map(({ facts }) => facts.duration) },
+      { label: 'Pickup', icon: 'pin' as const, values: comparison.map(({ tour, facts }) => facts.pickup ?? (tour.isPrivate ? 'Agreed with you' : 'Confirmed when you book')) },
+      ...(showCruise
+        ? [{ label: 'Boat cruise', icon: 'check' as const, values: comparison.map(({ cruise }) => (cruise ? cruiseText[cruise] : 'Not stated')) }]
+        : []),
+    ]
+  : [];
 
-const reviews = allReviews
-  .filter((review) => !isPlaceholder(review.author) && !isPlaceholder(review.text))
-  .slice(0, 3);
+const steps = [
+  { title: 'Choose your tour', text: 'Compare the tours by price, group size and pickup. Every price includes HST.' },
+  bookableOnline
+    ? { title: 'Reserve your date', text: 'Pick from real departure dates with live seat counts, then book online.' }
+    : { title: 'Reserve your date', text: 'Send a request for your date and we confirm the details by email.' },
+  { title: 'Enjoy Niagara Falls', text: mainFacts?.pickup ? `${mainFacts.pickup}. Then the day is planned for you.` : 'Meet us at pickup. The day is planned for you.' },
+];
 
-const reviewDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: 'long' });
+const experience = sections.experience ? tourPhotos.slice(0, 5) : [];
+const reviews = allReviews.filter((review) => !isPlaceholder(review.author) && !isPlaceholder(review.text)).slice(0, 3);
 
 const description = mainTour
   ? `${mainTour.shortDescription.slice(0, 120)}${mainFacts?.price ? ` From ${mainFacts.price} ${mainFacts.priceUnit}.` : ''}`
   : 'Niagara Falls day tours from Toronto.';
 ---
 
-<Site title={`${heading} | ${site.name}`} description={description.slice(0, 158)} site={site} tours={tours}>
+<Site title={`${heading} | ${site.name}`} description={description.slice(0, 158)} site={site} tours={tours} nav={homeNav(sections)} overlayHeader>
   <HeroBanner
-    photo={bannerPhoto}
+    photos={tourPhotos}
+    slideshow={HERO_SLIDESHOW}
+    label="Discover Niagara Falls"
     heading={heading}
     lead={mainTour?.shortDescription ?? null}
-    facts={bannerFacts}
+    facts={heroFacts}
     price={mainFacts?.price ?? null}
     priceUnit={mainFacts?.priceUnit ?? null}
-    cta={mainTour ? { href: `/tours/${mainTour.slug}/#book`, label: 'Check dates' } : null}
-    secondary={privateTour && privateFacts?.price
-      ? { href: `/tours/${privateTour.slug}/`, label: `Private tour for your group from ${privateFacts.price} per vehicle` }
-      : null}
+    cta={mainTour ? { href: `/tours/${mainTour.slug}/#book`, label: mainTour.isPrivate ? 'Request your date' : 'Check dates & availability' } : null}
   />
 
-  <main class="mx-auto w-full max-w-5xl px-5 pb-16 sm:px-6">
-    <section id="tours" class="scroll-mt-6 pt-12" aria-labelledby="tours-heading">
-      <h2 id="tours-heading" class="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Choose your tour</h2>
-      <div class="mt-6 grid gap-6 sm:grid-cols-2">
-        {visibleTours.map((tour) => <TourCard tour={tour} />)}
-      </div>
-
-      {comparison.length > 0 ? (
-        <div class="mt-8 overflow-x-auto rounded-2xl border border-ink/10 bg-white">
-          <table class="w-full min-w-[32rem] text-left text-sm">
-            <caption class="sr-only">Compare the tours</caption>
-            <thead>
-              <tr class="border-b border-ink/10">
-                <th scope="col" class="p-4 font-medium text-ink/70"><span class="sr-only">Detail</span></th>
-                {comparison.map(({ tour }) => <th scope="col" class="p-4 font-semibold text-ink">{tour.title}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="border-b border-ink/10">
-                <th scope="row" class="p-4 font-medium text-ink/70">Price including HST</th>
-                {comparison.map(({ facts }) => <td class="p-4 text-ink">{facts.price ? `From ${facts.price} ${facts.priceUnit?.replace(', including HST', '')}` : 'On request'}</td>)}
-              </tr>
-              <tr class="border-b border-ink/10">
-                <th scope="row" class="p-4 font-medium text-ink/70">Group</th>
-                {comparison.map(({ tour, facts }) => <td class="p-4 text-ink">{tour.isPrivate ? `Just your group${facts.guests ? `, ${facts.guests.toLowerCase()}` : ''}` : facts.guests ?? 'Small group'}</td>)}
-              </tr>
-              <tr class="border-b border-ink/10">
-                <th scope="row" class="p-4 font-medium text-ink/70">Length</th>
-                {comparison.map(({ facts }) => <td class="p-4 text-ink">{facts.duration}</td>)}
-              </tr>
-              <tr>
-                <th scope="row" class="p-4 font-medium text-ink/70">Pickup</th>
-                {comparison.map(({ tour, facts }) => <td class="p-4 text-ink">{facts.pickup ?? (tour.isPrivate ? 'Agreed with you' : 'Confirmed when you book')}</td>)}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-    </section>
-
+  <main>
     {trust.length > 0 ? (
-      <section class="mt-12 rounded-2xl bg-brand/5 px-5 py-6 sm:px-8" aria-labelledby="trust-heading">
+      <section class="border-b border-ink/10 bg-white" aria-labelledby="trust-heading">
         <h2 id="trust-heading" class="sr-only">Why book with us</h2>
-        <ul class="grid gap-4 text-sm font-medium text-ink sm:grid-cols-2 lg:grid-cols-4">
+        <ul class="container-site grid grid-cols-2 gap-x-6 gap-y-6 py-8 lg:flex lg:justify-between lg:py-10">
           {trust.map((item) => (
-            <li class="flex gap-2"><span aria-hidden="true" class="font-semibold text-brand">✓</span><span>{item}</span></li>
+            <li class="flex items-center gap-3 text-sm font-medium text-brand lg:text-base">
+              <Icon name={item.icon} class="h-6 w-6 shrink-0 text-teal" />
+              <span>{item.text}</span>
+            </li>
           ))}
         </ul>
       </section>
     ) : null}
 
-    {mainTour ? <DayTimeline stops={mainTour.itinerary} heading="Your day at a glance" id="day-heading" limit={5} /> : null}
+    {sections.tours ? (
+      <section id="tours" class="section-pad scroll-mt-16" aria-labelledby="tours-heading">
+        <div class="container-site">
+          <SectionHeading
+            id="tours-heading"
+            title={visibleTours.length === 2 ? 'Two ways to experience Niagara' : 'Ways to experience Niagara'}
+            lead="Choose the experience that fits your travel style."
+          />
+          <div class="mt-12 grid gap-8 md:grid-cols-2">
+            {visibleTours.map((tour) => <TourCard tour={tour} />)}
+          </div>
 
-    {reviews.length > 0 ? (
-      <section class="mt-16" aria-labelledby="reviews-heading">
-        <h2 id="reviews-heading" class="text-2xl font-bold tracking-tight text-ink sm:text-3xl">What guests say</h2>
-        <ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {reviews.map((review) => {
-            const date = new Date(`${review.reviewDate}T12:00:00Z`);
-            return (
-              <li class="flex flex-col rounded-2xl border border-ink/10 bg-white p-5">
-                <p class="text-brand">
-                  <span aria-hidden="true">{'★'.repeat(Math.max(0, Math.min(5, review.rating)))}</span>
-                  <span class="sr-only">{review.rating} out of 5</span>
-                </p>
-                <blockquote class="mt-2 flex-1 text-sm text-ink/80">{review.text}</blockquote>
-                <p class="mt-4 text-sm font-medium text-ink">
-                  {review.location ? `${review.author}, ${review.location}` : review.author}
-                </p>
-                {!Number.isNaN(date.getTime()) ? (
-                  <p class="text-xs text-ink/70"><time datetime={review.reviewDate}>{reviewDate.format(date)}</time></p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+          {rows.length > 0 ? (
+            <div class="mt-14">
+              <h3 class="font-display text-xl font-bold text-brand">Compare at a glance</h3>
+              {/* Desktop: table. */}
+              <div class="mt-5 hidden overflow-hidden rounded-card border border-ink/10 bg-white md:block">
+                <table class="w-full text-left text-sm">
+                  <thead class="bg-mist">
+                    <tr>
+                      <th scope="col" class="px-6 py-4 font-medium text-ink/70"><span class="sr-only">Detail</span></th>
+                      {comparison.map(({ tour }) => <th scope="col" class="font-display px-6 py-4 text-base font-bold text-brand">{tour.title}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-ink/10">
+                    {rows.map((row) => (
+                      <tr>
+                        <th scope="row" class="px-6 py-4 font-medium whitespace-nowrap text-ink/75">
+                          <span class="flex items-center gap-2"><Icon name={row.icon} class="h-4 w-4 text-teal" />{row.label}</span>
+                        </th>
+                        {row.values.map((value) => <td class="px-6 py-4 text-ink">{value}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile: one stacked list per tour. */}
+              <div class="mt-5 grid gap-4 md:hidden">
+                {comparison.map(({ tour }, column) => (
+                  <dl class="rounded-card border border-ink/10 bg-white p-5">
+                    <p class="font-display text-base font-bold text-brand">{tour.title}</p>
+                    {rows.map((row) => (
+                      <div class="mt-3 flex justify-between gap-4 border-t border-ink/10 pt-3 text-sm">
+                        <dt class="flex shrink-0 items-center gap-2 text-ink/75"><Icon name={row.icon} class="h-4 w-4 text-teal" />{row.label}</dt>
+                        <dd class="text-right text-ink">{row.values[column]}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </section>
     ) : null}
 
-    <GuideVehicle site={site} />
+    {mainTour ? (
+      <section class="section-pad bg-mist" aria-labelledby="how-heading">
+        <div class="container-site">
+          <SectionHeading id="how-heading" title="How it works" />
+          <ol class="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
+            {steps.map((step, index) => (
+              <li class="border-t border-brand/20 pt-6">
+                <p class="font-display text-sm font-bold tracking-[0.18em] text-teal-ink">{String(index + 1).padStart(2, '0')}</p>
+                <h3 class="font-display mt-3 text-xl font-bold text-brand lg:text-2xl">{step.title}</h3>
+                <p class="mt-2 text-ink/75">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+          <a href={`/tours/${mainTour.slug}/#book`} class="link mt-10 inline-flex items-center gap-2 text-teal-ink">
+            {mainTour.isPrivate ? 'Request your date' : 'See dates for the day tour'}<Icon name="arrow" class="h-4 w-4" />
+          </a>
+        </div>
+      </section>
+    ) : null}
 
-    <div class="mt-4">
-      <FaqList faqs={faqs.slice(0, 8)} />
-    </div>
+    {experience.length > 0 ? (
+      <section id="experience" class="section-pad scroll-mt-16" aria-labelledby="experience-heading">
+        <div class="container-site">
+          <SectionHeading id="experience-heading" title="More than just the falls" />
+          <ul class="mt-12 grid grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-12 lg:gap-x-6 lg:gap-y-8">
+            {experience.map((photo, index) => {
+              const lead = index === 0;
+              const lastRow = index >= 3;
+              const widen = !lead && index === experience.length - 1 && (experience.length - 1) % 2 === 1;
+              return (
+                <li
+                  class:list={[
+                    'group',
+                    lead && 'col-span-2 lg:col-span-7 lg:row-span-2',
+                    !lead && !lastRow && 'lg:col-span-5',
+                    lastRow && (experience.length === 4 ? 'lg:col-span-12' : index === 3 ? 'lg:col-span-5' : 'lg:col-span-7'),
+                    widen && 'col-span-2',
+                  ]}
+                >
+                  <figure class="flex h-full flex-col">
+                    <div class="relative flex-1 overflow-hidden rounded-card bg-mist">
+                      <Photo
+                        photo={photo}
+                        sizes={lead ? '(min-width: 1200px) 680px, 100vw' : '(min-width: 1200px) 480px, 50vw'}
+                        widths={lead ? [640, 960, 1280] : [400, 640, 960]}
+                        class:list={[
+                          'w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100',
+                          lead ? 'aspect-[4/3] lg:absolute lg:inset-0 lg:h-full lg:aspect-auto' : widen ? 'aspect-[2/1] lg:aspect-auto lg:h-72' : 'aspect-square lg:aspect-auto lg:h-56',
+                          lastRow && 'lg:h-72',
+                        ]}
+                      />
+                    </div>
+                    <figcaption class="mt-3 text-sm text-ink/70">{photo.alt}</figcaption>
+                  </figure>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
+    ) : null}
+
+    <GuideVehicle site={site} bandClass="bg-white border-y border-ink/10" class="container-site section-pad" />
+
+    {reviews.length > 0 ? (
+      <div id="reviews" class="scroll-mt-16 bg-mist">
+        <ReviewList reviews={reviews} class="container-site section-pad" />
+      </div>
+    ) : null}
+
+    {faqs.length > 0 ? (
+      <div id="faq" class="container-site section-pad scroll-mt-16">
+        <FaqList faqs={faqs.slice(0, 6)} />
+      </div>
+    ) : null}
   </main>
 </Site>

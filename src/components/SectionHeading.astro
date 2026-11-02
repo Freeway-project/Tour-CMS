@@ -1,0 +1,28 @@
+---
+/**
+ * The one section heading style: optional small label, the display face in
+ * evergreen, an optional lead. `tone="dark"` for headings on evergreen bands.
+ */
+interface Props {
+  id: string;
+  title: string;
+  lead?: string | null;
+  label?: string | null;
+  tone?: 'light' | 'dark';
+  align?: 'left' | 'center';
+  class?: string;
+}
+
+const { id, title, lead, label, tone = 'light', align = 'left', class: className } = Astro.props;
+const dark = tone === 'dark';
+---
+
+<div class:list={[align === 'center' && 'mx-auto text-center', 'max-w-2xl', className]}>
+  {label ? (
+    <p class:list={['mb-3 text-xs font-semibold tracking-[0.18em] uppercase', dark ? 'text-accent' : 'text-accent-ink']}>{label}</p>
+  ) : null}
+  <h2 id={id} class:list={['heading-section', dark && 'text-white']}>{title}</h2>
+  {lead ? (
+    <p class:list={['mt-4 text-base text-pretty lg:text-lg', dark ? 'text-white/80' : 'text-ink/75']}>{lead}</p>
+  ) : null}
+</div>
