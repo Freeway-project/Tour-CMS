@@ -8,9 +8,11 @@ import {
   addonSchema,
   fieldErrors,
   imageAltSchema,
+  itineraryToText,
 } from '../../../lib/admin-schemas';
 import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
 import { triggerPublish } from '../../../lib/publish';
+import { checkPhotoUpload, safeFileName } from '../../../lib/upload';
 import Admin from '../../../layouts/Admin.astro';
 
 const supabase = Astro.locals.supabase;
@@ -30,6 +32,9 @@ interface TourRow {
   highlights: string[] | null;
   important_info: string | null;
   hero_image_path: string;
+  max_guests: number | null;
+  itinerary: Array<{ time: string; title: string; detail: string | null }> | null;
+  excludes: string[] | null;
 }
 
 interface PackageRow {
@@ -91,6 +96,9 @@ if (supabase && Astro.request.method === 'POST') {
           description: data.description,
           highlights: data.highlights,
           important_info: data.important_info ?? null,
+          max_guests: data.max_guests ?? null,
+          itinerary: data.itinerary,
+          excludes: data.excludes,
           duration_minutes: durationMinutes,
           status: data.status,
           is_private: data.is_private,
@@ -183,8 +191,9 @@ if (supabase && Astro.request.method === 'POST') {
     const width = Number(form.get('width') ?? 0);
     const height = Number(form.get('height') ?? 0);
     const file = form.get('file');
-    if (!(file instanceof File) || file.size === 0) {
-      errors._form = 'Choose a photo to upload.';
+    const check = checkPhotoUpload(file, width, height);
+    if (!check.ok || !(file instanceof File)) {
+      errors._form = check.message ?? 'Choose a photo to upload.';
     } else if (alt.length < 3) {
       errors._form = 'Alt text is required.';
     } else if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
@@ -192,7 +201,7 @@ if (supabase && Astro.request.method === 'POST') {
     } else {
       const { data: existingImgs } = await supabase.from('tour_images').select('id').eq('tour_id', id);
       const imgCount = existingImgs?.length ?? 0;
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const safeName = safeFileName(file.name);
       const path = `${id}/${Date.now()}-${safeName}`;
       const { error: upErr } = await supabase.storage.from('tour-images').upload(path, file, {
         contentType: file.type || 'image/webp',
@@ -248,7 +257,7 @@ if (supabase && Astro.request.method === 'POST') {
 const tourQuery = supabase
   ? await supabase
       .from('tours')
-      .select('id, slug, title, short_description, description, duration_minutes, status, is_private, sort_order, highlights, important_info, hero_image_path')
+      .select('id, slug, title, short_description, description, duration_minutes, status, is_private, sort_order, highlights, important_info, hero_image_path, max_guests, itinerary, excludes')
       .eq('id', id)
       .maybeSingle()
   : null;
@@ -316,6 +325,18 @@ const mins = tour ? tour.duration_minutes % 60 : 0;
           </label>
           <label class="block text-sm font-medium text-ink">Important info
             <textarea name="important_info" rows="3" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{tour.important_info ?? ''}</textarea>
+          </label>
+          <label class="block text-sm font-medium text-ink">Not included (one per line)
+            <textarea name="excludes" rows="3" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{(tour.excludes ?? []).join('\n')}</textarea>
+            {errors.excludes ? <span class="text-xs text-red-600">{errors.excludes}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">The day, one stop per line: <code>08:00 | What happens | optional detail</code>
+            <textarea name="itinerary" rows="6" class="mt-1 w-full rounded border border-ink/20 px-3 py-2 font-mono text-sm" placeholder="07:45 | Pickup at 55 York St">{itineraryToText(tour.itinerary ?? [])}</textarea>
+            {errors.itinerary ? <span class="text-xs text-red-600">{errors.itinerary}</span> : null}
+          </label>
+          <label class="block text-sm font-medium text-ink">Maximum guests per departure (shared tours; shown as "Max N guests")
+            <input name="max_guests" type="number" min="1" max="100" value={tour.max_guests ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+            {errors.max_guests ? <span class="text-xs text-red-600">{errors.max_guests}</span> : null}
           </label>
           <div class="flex gap-3">
             <label class="block text-sm font-medium text-ink">Duration hours

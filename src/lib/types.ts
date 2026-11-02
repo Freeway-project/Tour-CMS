@@ -55,6 +55,27 @@ export interface PickupLocation {
   pickupTime: string | null;
 }
 
+export interface ItineraryStop {
+  /** Local Toronto time, `HH:MM`. */
+  time: string;
+  title: string;
+  detail: string | null;
+}
+
+export interface Photo {
+  /** Public URL of the image (Supabase Storage or a local `/images/` file). */
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+}
+
+export interface TourImage extends Photo {
+  id: string;
+  isHero: boolean;
+  sortOrder: number;
+}
+
 export interface Tour {
   id: string;
   slug: string;
@@ -70,6 +91,12 @@ export interface Tour {
   highlights: string[];
   /** Markdown. */
   importantInfo: string | null;
+  /** Shared tours: the group limit shown to visitors. Null for private tours. */
+  maxGuests: number | null;
+  itinerary: ItineraryStop[];
+  excludes: string[];
+  /** Sorted by `sortOrder`. */
+  images: TourImage[];
   packages: Package[];
   addons: Addon[];
   pickups: PickupLocation[];
@@ -151,6 +178,8 @@ export interface SiteSettings {
   privacyPolicy: string;
   terms: string;
   announcement: { enabled: boolean; text: string; href: string | null };
+  guide: { name: string; bio: string; photo: Photo | null };
+  vehicle: { text: string; photo: Photo | null };
   ratings: SiteRating[];
   lastPublishAt: string | null;
 }

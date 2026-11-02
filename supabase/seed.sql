@@ -325,3 +325,12 @@ insert into public.reviews (
     'The day was relaxed and never felt rushed. The stops along the Niagara Parkway were well chosen, which made the price feel good value.',
     '2026-09-27', 'tripadvisor', null, false, true, 8
   );
+
+-- Task 09: the shared tour's group limit follows its schedules; the guide and
+-- vehicle stay empty (hidden) until the owner writes them.
+update public.tours t
+set max_guests = (
+  select max(s.capacity) from public.schedules s
+  where s.tour_id = t.id and s.is_active
+)
+where not t.is_private;

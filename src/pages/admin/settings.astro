@@ -1,9 +1,14 @@
 ---
 export const prerender = false;
 
-import { siteSettingsSchema, fieldErrors } from '../../lib/admin-schemas';
-import { triggerPublish } from '../../lib/publish';
+import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
+
+import PhotoUpload from '../../components/admin/PhotoUpload.astro';
 import Admin from '../../layouts/Admin.astro';
+import { siteSettingsSchema, fieldErrors } from '../../lib/admin-schemas';
+import { parseStoredPhoto } from '../../lib/photos';
+import { triggerPublish } from '../../lib/publish';
+import { checkPhotoUpload, safeFileName } from '../../lib/upload';
 
 const supabase = Astro.locals.supabase;
 const waitUntil = Astro.locals.runtime?.ctx?.waitUntil;
@@ -19,10 +24,20 @@ interface SettingsRow {
   cancellation_policy: string;
   privacy_policy: string;
   terms: string;
+  guide_name: string;
+  guide_bio: string;
+  guide_photo: unknown;
+  vehicle_text: string;
+  vehicle_photo: unknown;
   announcement_enabled: boolean;
   announcement_text: string;
   announcement_href: string | null;
 }
+
+/** Which jsonb column a photo upload writes to. */
+const PHOTO_COLUMNS = { guide: 'guide_photo', vehicle: 'vehicle_photo' } as const;
+type PhotoTarget = keyof typeof PHOTO_COLUMNS;
+const isPhotoTarget = (value: string): value is PhotoTarget => value in PHOTO_COLUMNS;
 
 let settings: SettingsRow | null = null;
 let saved = false;
@@ -31,43 +46,94 @@ let errors: Record<string, string> = {};
 if (supabase) {
   if (Astro.request.method === 'POST') {
     const form = await Astro.request.formData();
-    const parsed = siteSettingsSchema.safeParse(Object.fromEntries(form));
-    if (!parsed.success) {
-      errors = fieldErrors(parsed.error);
+    const intent = String(form.get('intent') ?? 'settings');
+    const target = String(form.get('target') ?? '');
+
+    if (intent === 'photo-upload' || intent === 'photo-remove') {
+      if (!isPhotoTarget(target)) {
+        errors._form = 'Unknown photo.';
+      } else if (intent === 'photo-remove') {
+        const { error } = await supabase.from('site_settings').update({ [PHOTO_COLUMNS[target]]: null }).eq('id', 1);
+        if (error) errors._form = error.message;
+        else {
+          saved = true;
+          await triggerPublish(supabase, waitUntil);
+        }
+      } else {
+        const alt = String(form.get('alt') ?? '').trim().slice(0, 200);
+        const width = Number(form.get('width') ?? 0);
+        const height = Number(form.get('height') ?? 0);
+        const file = form.get('file');
+        const check = checkPhotoUpload(file, width, height);
+        if (!check.ok || !(file instanceof File)) {
+          errors._form = check.message ?? 'Choose a photo to upload.';
+        } else if (alt.length < 3) {
+          errors._form = 'Describe the photo first.';
+        } else {
+          const path = `site/${target}-${Date.now()}-${safeFileName(file.name)}`;
+          const { error: uploadError } = await supabase.storage
+            .from('tour-images')
+            .upload(path, file, { contentType: file.type, upsert: false });
+          if (uploadError) {
+            errors._form = uploadError.message;
+          } else {
+            const { error } = await supabase
+              .from('site_settings')
+              .update({ [PHOTO_COLUMNS[target]]: { path, width, height, alt } })
+              .eq('id', 1);
+            if (error) errors._form = error.message;
+            else {
+              saved = true;
+              await triggerPublish(supabase, waitUntil);
+            }
+          }
+        }
+      }
     } else {
-      const data = parsed.data;
-      const payload = {
-        name: data.name,
-        tagline: data.tagline,
-        phone: data.phone,
-        whatsapp: data.whatsapp,
-        email: data.email,
-        address: data.address,
-        hst_number: data.hst_number ?? null,
-        cancellation_policy: data.cancellation_policy,
-        privacy_policy: data.privacy_policy ?? '',
-        terms: data.terms ?? '',
-        announcement_enabled: data.announcement_enabled,
-        announcement_text: data.announcement_text ?? '',
-        announcement_href: data.announcement_href ?? null,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: updateError } = await supabase.from('site_settings').update(payload).eq('id', 1);
-      if (updateError) errors._form = updateError.message;
-      else {
-        saved = true;
-        await triggerPublish(supabase, waitUntil);
+      const parsed = siteSettingsSchema.safeParse(Object.fromEntries(form));
+      if (!parsed.success) {
+        errors = fieldErrors(parsed.error);
+      } else {
+        const data = parsed.data;
+        const payload = {
+          name: data.name,
+          tagline: data.tagline,
+          phone: data.phone,
+          whatsapp: data.whatsapp,
+          email: data.email,
+          address: data.address,
+          hst_number: data.hst_number ?? null,
+          cancellation_policy: data.cancellation_policy,
+          privacy_policy: data.privacy_policy ?? '',
+          terms: data.terms ?? '',
+          guide_name: data.guide_name ?? '',
+          guide_bio: data.guide_bio ?? '',
+          vehicle_text: data.vehicle_text ?? '',
+          announcement_enabled: data.announcement_enabled,
+          announcement_text: data.announcement_text ?? '',
+          announcement_href: data.announcement_href ?? null,
+          updated_at: new Date().toISOString(),
+        };
+        const { error: updateError } = await supabase.from('site_settings').update(payload).eq('id', 1);
+        if (updateError) errors._form = updateError.message;
+        else {
+          saved = true;
+          await triggerPublish(supabase, waitUntil);
+        }
       }
     }
   }
 
   const { data } = await supabase
     .from('site_settings')
-    .select('name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, announcement_enabled, announcement_text, announcement_href')
+    .select('name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, guide_name, guide_bio, guide_photo, vehicle_text, vehicle_photo, announcement_enabled, announcement_text, announcement_href')
     .eq('id', 1)
     .maybeSingle();
   settings = (data as unknown as SettingsRow) ?? null;
 }
+
+const guidePhoto = parseStoredPhoto(settings?.guide_photo, PUBLIC_SUPABASE_URL);
+const vehiclePhoto = parseStoredPhoto(settings?.vehicle_photo, PUBLIC_SUPABASE_URL);
 ---
 
 <Admin title="Site settings" description="Edit site settings." saved={saved}>
@@ -117,6 +183,20 @@ if (supabase) {
       Use ## for a heading and start lines with - for a list. A policy that is empty or starts
       with TODO stays hidden from the footer and search engines.
     </p>
+    <h2 class="pt-4 text-base font-semibold text-ink">Meet your guide and vehicle</h2>
+    <p class="text-xs text-ink/70">Shown on the home and tour pages once filled in. Leave empty to hide.</p>
+    <label class="block text-sm font-medium text-ink">Guide name
+      <input name="guide_name" value={settings?.guide_name ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
+      {errors.guide_name ? <span class="text-xs text-red-600">{errors.guide_name}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">About the guide (markdown, a few sentences)
+      <textarea name="guide_bio" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.guide_bio ?? ''}</textarea>
+      {errors.guide_bio ? <span class="text-xs text-red-600">{errors.guide_bio}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Your vehicle (e.g. "Mercedes-Benz Sprinter, 11 leather seats, air conditioning, USB charging")
+      <textarea name="vehicle_text" rows="2" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.vehicle_text ?? ''}</textarea>
+      {errors.vehicle_text ? <span class="text-xs text-red-600">{errors.vehicle_text}</span> : null}
+    </label>
     <label class="flex items-center gap-2 text-sm font-medium text-ink">
       <input type="checkbox" name="announcement_enabled" checked={settings?.announcement_enabled ?? false} />
       Announcement enabled
@@ -128,6 +208,13 @@ if (supabase) {
       <input name="announcement_href" value={settings?.announcement_href ?? ''} class="mt-1 w-full rounded border border-ink/20 px-3 py-2" />
       {errors.announcement_href ? <span class="text-xs text-red-600">{errors.announcement_href}</span> : null}
     </label>
+    <input type="hidden" name="intent" value="settings" />
     <button type="submit" class="rounded bg-brand px-4 py-2 font-semibold text-bg">Save</button>
   </form>
+
+  <section class="mt-10 space-y-3">
+    <h2 class="text-base font-semibold text-ink">Guide and vehicle photos</h2>
+    <PhotoUpload target="guide" label="Guide photo" current={guidePhoto} />
+    <PhotoUpload target="vehicle" label="Vehicle photo" current={vehiclePhoto} />
+  </section>
 </Admin>

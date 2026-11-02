@@ -1,0 +1,36 @@
+---
+import { Picture } from 'astro:assets';
+
+import type { Photo } from '../lib/types';
+
+/**
+ * Responsive photo from the CMS (AVIF + WebP, several widths, fixed aspect so
+ * nothing shifts). `priority` is for the single above-the-fold hero only.
+ */
+interface Props {
+  photo: Photo;
+  sizes: string;
+  widths?: number[];
+  priority?: boolean;
+  class?: string;
+}
+
+const { photo, sizes, widths = [480, 800, 1200, 1600], priority = false, class: className } = Astro.props;
+const usable = widths.filter((width) => width <= photo.width);
+const finalWidths = usable.length > 0 ? usable : [photo.width];
+---
+
+<Picture
+  src={photo.src}
+  alt={photo.alt}
+  width={photo.width}
+  height={photo.height}
+  widths={finalWidths}
+  sizes={sizes}
+  formats={['avif', 'webp']}
+  fallbackFormat="jpg"
+  loading={priority ? 'eager' : 'lazy'}
+  fetchpriority={priority ? 'high' : 'auto'}
+  decoding={priority ? 'sync' : 'async'}
+  class={className}
+/>

@@ -1,47 +1,54 @@
 ---
-import { formatCadHeadline, formatDuration } from '../lib/format';
-import { isPlaceholder } from '../lib/placeholder';
-import { fromPrice } from '../lib/pricing';
+import { heroImage } from '../lib/photos';
+import { tourFacts, tourInclusions } from '../lib/tour-facts';
 import type { Tour } from '../lib/types';
+import Photo from './Photo.astro';
 
 interface Props {
   tour: Tour;
 }
 
 const { tour } = Astro.props;
-
-const offer = fromPrice(tour);
-const duration = formatDuration(tour.durationMinutes);
-const pickup = tour.pickups.find((entry) => entry.isActive && entry.pickupTime);
-const pickupFrom =
-  pickup && pickup.name && !isPlaceholder(pickup.name) ? ` from ${pickup.name}` : '';
-const pickupLabel = pickup?.pickupTime ? `Pickup at ${pickup.pickupTime}${pickupFrom}` : null;
-const linkText = `Book the ${tour.title}`;
+const facts = tourFacts(tour);
+const photo = heroImage(tour.images) ?? tour.images[0] ?? null;
+const inclusions = tourInclusions(tour).slice(0, 3);
 ---
 
-<article class="flex h-full flex-col rounded-2xl border border-ink/10 bg-white p-5 shadow-raised sm:p-6">
-  <h3 class="text-xl font-bold tracking-tight text-ink text-balance">{tour.title}</h3>
-  <p class="mt-2 text-sm text-ink/80 text-pretty">{tour.shortDescription}</p>
+<article class="flex h-full flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-raised">
+  {photo ? (
+    <Photo photo={photo} sizes="(min-width: 640px) 50vw, 100vw" widths={[480, 800, 1200]} class="aspect-[3/2] w-full object-cover" />
+  ) : (
+    <div class="aspect-[3/2] w-full bg-brand/10" aria-hidden="true"></div>
+  )}
+  <div class="flex flex-1 flex-col p-5 sm:p-6">
+    <h3 class="text-xl font-bold tracking-tight text-ink text-balance">{tour.title}</h3>
+    <p class="mt-2 text-sm text-ink/80 text-pretty">{tour.shortDescription}</p>
 
-  <ul class="mt-4 space-y-1.5 text-sm text-ink/80">
-    <li>{duration}</li>
-    {pickupLabel ? <li>{pickupLabel}</li> : null}
-  </ul>
+    <ul class="mt-4 space-y-1 text-sm text-ink/80">
+      {facts.guests ? <li class="font-medium text-ink">{facts.guests}</li> : null}
+      <li>{facts.duration}</li>
+      {facts.pickup ? <li>{facts.pickup}</li> : null}
+    </ul>
 
-  {offer ? (
-    <p class="mt-4 text-sm text-ink/70">
-      From{' '}
-      <strong class="text-base font-semibold text-ink">{formatCadHeadline(offer.cents)}</strong>
-      {offer.unit === 'person' ? ' per person' : ' per vehicle'}
-    </p>
-  ) : null}
+    {inclusions.length > 0 ? (
+      <ul class="mt-4 space-y-1 text-sm text-ink/80">
+        {inclusions.map((item) => (
+          <li class="flex gap-2"><span aria-hidden="true" class="font-semibold text-brand">✓</span><span>{item}</span></li>
+        ))}
+      </ul>
+    ) : null}
 
-  <div class="mt-auto pt-5">
-    <a
-      href={`/tours/${tour.slug}/`}
-      class="inline-flex w-fit items-center rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg shadow-raised transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
-      {linkText}
-    </a>
+    <div class="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
+      {facts.price ? (
+        <p class="text-sm text-ink/70">
+          From <span class="block text-2xl font-bold text-ink">{facts.price}</span>
+          <span class="text-xs">{facts.priceUnit}</span>
+        </p>
+      ) : null}
+      <a href={`/tours/${tour.slug}/`} class="inline-flex items-center rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+        See the {tour.isPrivate ? 'private tour' : 'day tour'}
+        <span class="sr-only">: {tour.title}</span>
+      </a>
+    </div>
   </div>
 </article>

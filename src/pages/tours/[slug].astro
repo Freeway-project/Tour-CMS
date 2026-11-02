@@ -3,16 +3,22 @@ export const prerender = true;
 
 import BookingWidget from '../../components/booking/BookingWidget.astro';
 import InquiryForm from '../../components/booking/InquiryForm.astro';
-import Button from '../../components/Button.astro';
+import DayTimeline from '../../components/DayTimeline.astro';
 import FaqList from '../../components/FaqList.astro';
+import GuideVehicle from '../../components/GuideVehicle.astro';
+import HeroBanner from '../../components/HeroBanner.astro';
+import Photo from '../../components/Photo.astro';
 import Site from '../../layouts/Site.astro';
 import { getTours } from '../../lib/db/catalog';
 import { getFaqs, getReviews, getSiteSettings } from '../../lib/db/content';
-import { formatCad, formatCadHeadline, formatDuration } from '../../lib/format';
+import { formatClockTime } from '../../lib/datetime';
+import { formatCad } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 import { isPlaceholder } from '../../lib/placeholder';
 import { hasPolicy } from '../../lib/policies';
-import { fromPrice } from '../../lib/pricing';
+import { heroImage } from '../../lib/photos';
+import { fromPrice, withHst } from '../../lib/pricing';
+import { tourFacts, tourInclusions } from '../../lib/tour-facts';
 import type { Tour } from '../../lib/types';
 
 export async function getStaticPaths() {
@@ -68,7 +74,18 @@ const ratingSummary =
     ? `${averageRating.toFixed(1)} average from ${totalReviews.toLocaleString('en-CA')} guest reviews`
     : null;
 
-const duration = formatDuration(tour.durationMinutes);
+const facts = tourFacts(tour);
+const bannerPhoto = heroImage(tour.images) ?? tour.images[0] ?? null;
+const gallery = tour.images.filter((image) => image !== bannerPhoto);
+const inclusions = tourInclusions(tour);
+const excludes = tour.excludes.filter((item) => !isPlaceholder(item));
+const bannerFacts = [
+  facts.guests,
+  facts.duration,
+  facts.pickup,
+  showCancellation ? 'Free cancellation' : null,
+  ratingSummary,
+].filter((fact): fact is string => Boolean(fact));
 
 const description = tour.shortDescription.slice(0, 158);
 const title = `${tour.title} | ${site.name}`;
@@ -117,126 +134,18 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
     <script type="application/ld+json" set:html={productLdJson} />
   </Fragment>
 
-  <main class="mx-auto w-full max-w-3xl px-5 pt-8 pb-16 sm:px-6">
-    <a href="/" class="text-sm font-medium text-brand hover:underline">
-      ← All tours
-    </a>
+  <HeroBanner
+    photo={bannerPhoto}
+    heading={tour.title}
+    lead={tour.shortDescription}
+    facts={bannerFacts}
+    price={facts.price}
+    priceUnit={facts.priceUnit}
+    cta={{ href: '#book', label: tour.isPrivate ? 'Ask for your date' : 'Check dates' }}
+  />
 
-    <header class="mt-8">
-      <p class="text-sm font-semibold tracking-widest text-brand uppercase">
-        Toronto → Niagara Falls
-      </p>
-      <h1 class="mt-2 text-4xl font-bold tracking-tight text-ink text-balance sm:text-5xl">
-        {tour.title}
-      </h1>
-      <p class="mt-4 max-w-prose text-lg text-ink/80 text-pretty">{tour.shortDescription}</p>
-
-      <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink/70">
-        <span>{duration}</span>
-        {ratingSummary ? <span>{ratingSummary}</span> : null}
-        {lowest ? (
-          <span>
-            From <strong class="font-semibold text-ink">{formatCadHeadline(lowest.cents)}</strong>
-            {lowest.unit === 'person' ? ' per person' : ' per vehicle'}
-          </span>
-        ) : null}
-      </div>
-
-      <div class="mt-6">
-        <Button href="#book" variant="primary">
-          Check dates &amp; book
-        </Button>
-      </div>
-    </header>
-
-    <section class="mt-12" aria-labelledby="packages-heading">
-      <h2 id="packages-heading" class="text-2xl font-bold tracking-tight text-ink">
-        Packages
-      </h2>
-      <div class="mt-4 grid gap-4 sm:grid-cols-2">
-        {activePackages.map((pkg) => (
-          <article class="rounded-2xl border border-ink/10 bg-white p-5">
-            <h3 class="text-lg font-semibold text-ink">{pkg.name}</h3>
-            {pkg.description ? <p class="mt-1 text-sm text-ink/70">{pkg.description}</p> : null}
-
-            {pkg.pricingMode === 'per_group' ? (
-              <p class="mt-3 text-ink">
-                <span class="text-xl font-semibold">{formatCad(pkg.priceAdultCents)}</span>
-                <span class="text-sm text-ink/70"> per vehicle, up to {pkg.maxPax} people</span>
-              </p>
-            ) : (
-              <dl class="mt-3 grid grid-cols-3 gap-2 text-sm">
-                <div>
-                  <dt class="text-ink/70">Adult</dt>
-                  <dd class="font-semibold text-ink">{formatCad(pkg.priceAdultCents)}</dd>
-                </div>
-                <div>
-                  <dt class="text-ink/70">Child</dt>
-                  <dd class="font-semibold text-ink">
-                    {formatCad(pkg.priceChildCents ?? pkg.priceAdultCents)}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-ink/70">Senior</dt>
-                  <dd class="font-semibold text-ink">
-                    {formatCad(pkg.priceSeniorCents ?? pkg.priceAdultCents)}
-                  </dd>
-                </div>
-              </dl>
-            )}
-
-            {pkg.includes.length > 0 ? (
-              <ul class="mt-4 space-y-1.5 text-sm text-ink/80">
-                {pkg.includes.map((item) => (
-                  <li class="flex gap-2">
-                    <span aria-hidden="true" class="text-brand">
-                      ✓
-                    </span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </section>
-
-    <section class="mt-12" aria-labelledby="about-heading">
-      <h2 id="about-heading" class="text-2xl font-bold tracking-tight text-ink">
-        About this tour
-      </h2>
-      <div
-        class="mt-4 space-y-4 text-ink/80 [&_a]:font-medium [&_a]:text-brand [&_a]:underline"
-        set:html={renderMarkdown(tour.description)}
-      />
-    </section>
-
-    <section class="mt-12" aria-labelledby="pickup-heading">
-      <h2 id="pickup-heading" class="text-2xl font-bold tracking-tight text-ink">
-        Pickup
-      </h2>
-      {pickups.length > 0 ? (
-        <ul class="mt-4 space-y-3">
-          {pickups.map((pickup) => (
-            <li class="rounded-xl border border-ink/10 bg-white p-4">
-              <p class="font-semibold text-ink">{pickup.name}</p>
-              <p class="mt-1 text-sm text-ink/70">{pickup.address}</p>
-              {pickup.pickupTime ? (
-                <p class="mt-2 text-sm text-ink/80">Pickup at {pickup.pickupTime}</p>
-              ) : null}
-              {pickup.pickupNote ? (
-                <p class="mt-1 text-sm text-ink/70">{pickup.pickupNote}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p class="mt-4 text-ink/80">Pickup details are confirmed when you book.</p>
-      )}
-    </section>
-
-    <div class="mt-12">
+  <main class="mx-auto w-full max-w-3xl px-5 pt-10 pb-16 sm:px-6">
+    <div>
       {tour.isPrivate ? <InquiryForm tour={tour} /> : <BookingWidget tour={tour} />}
       {showCancellation ? (
         <p class="mt-3 text-sm text-ink/70">
@@ -250,22 +159,126 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
       ) : null}
     </div>
 
+    {gallery.length > 0 ? (
+      <section class="mt-14" aria-labelledby="photos-heading">
+        <h2 id="photos-heading" class="text-2xl font-bold tracking-tight text-ink">Photos</h2>
+        <ul class="-mx-5 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0" tabindex="0" aria-label="Tour photos, scroll sideways">
+          {gallery.map((image) => (
+            <li class="w-[80%] shrink-0 snap-start sm:w-[45%]">
+              <Photo photo={image} sizes="(min-width: 640px) 360px, 80vw" widths={[480, 800]} class="aspect-[4/3] w-full rounded-xl object-cover" />
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : null}
+
+    <DayTimeline stops={tour.itinerary} heading="Your day" id="day-heading" />
+
+    {inclusions.length > 0 || excludes.length > 0 ? (
+      <section class="mt-16" aria-labelledby="included-heading">
+        <h2 id="included-heading" class="text-2xl font-bold tracking-tight text-ink">What's included</h2>
+        <div class="mt-6 grid gap-6 sm:grid-cols-2">
+          {inclusions.length > 0 ? (
+            <div>
+              <h3 class="font-semibold text-ink">Included</h3>
+              <ul class="mt-2 space-y-1.5 text-sm text-ink/80">
+                {inclusions.map((item) => (
+                  <li class="flex gap-2"><span aria-hidden="true" class="font-semibold text-brand">✓</span><span>{item}</span></li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {excludes.length > 0 ? (
+            <div>
+              <h3 class="font-semibold text-ink">Not included</h3>
+              <ul class="mt-2 space-y-1.5 text-sm text-ink/80">
+                {excludes.map((item) => (
+                  <li class="flex gap-2"><span aria-hidden="true" class="font-semibold text-ink/50">–</span><span>{item}</span></li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+        {tour.importantInfo && !isPlaceholder(tour.importantInfo) ? (
+          <p class="mt-6 rounded-xl bg-brand/5 p-4 text-sm text-ink">{tour.importantInfo}</p>
+        ) : null}
+      </section>
+    ) : null}
+
+    <section class="mt-16" aria-labelledby="prices-heading">
+      <h2 id="prices-heading" class="text-2xl font-bold tracking-tight text-ink">Prices, including HST</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        {activePackages.map((pkg) => (
+          <article class="rounded-2xl border border-ink/10 bg-white p-5">
+            <h3 class="text-lg font-semibold text-ink">{pkg.name}</h3>
+            {pkg.description ? <p class="mt-1 text-sm text-ink/70">{pkg.description}</p> : null}
+            {pkg.pricingMode === 'per_group' ? (
+              <p class="mt-3 text-ink">
+                <span class="text-xl font-semibold">{formatCad(withHst(pkg.priceAdultCents))}</span>
+                <span class="text-sm text-ink/70"> per vehicle{pkg.maxPax ? `, up to ${pkg.maxPax} people` : ''}</span>
+              </p>
+            ) : (
+              <dl class="mt-3 grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <dt class="text-ink/70">Adult</dt>
+                  <dd class="font-semibold text-ink">{formatCad(withHst(pkg.priceAdultCents))}</dd>
+                </div>
+                <div>
+                  <dt class="text-ink/70">Child</dt>
+                  <dd class="font-semibold text-ink">{formatCad(withHst(pkg.priceChildCents ?? pkg.priceAdultCents))}</dd>
+                </div>
+                <div>
+                  <dt class="text-ink/70">Senior</dt>
+                  <dd class="font-semibold text-ink">{formatCad(withHst(pkg.priceSeniorCents ?? pkg.priceAdultCents))}</dd>
+                </div>
+              </dl>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="mt-16" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="text-2xl font-bold tracking-tight text-ink">About this tour</h2>
+      <div
+        class="mt-4 space-y-4 text-ink/80 [&_a]:font-medium [&_a]:text-brand [&_a]:underline"
+        set:html={renderMarkdown(tour.description)}
+      />
+    </section>
+
+    <section class="mt-16" aria-labelledby="pickup-heading">
+      <h2 id="pickup-heading" class="text-2xl font-bold tracking-tight text-ink">Pickup</h2>
+      {pickups.length > 0 ? (
+        <ul class="mt-4 space-y-3">
+          {pickups.map((pickup) => (
+            <li class="rounded-xl border border-ink/10 bg-white p-4">
+              <p class="font-semibold text-ink">{pickup.name}</p>
+              <p class="mt-1 text-sm text-ink/70">{pickup.address}</p>
+              {pickup.pickupTime ? <p class="mt-2 text-sm text-ink/80">Pickup at {formatClockTime(pickup.pickupTime)}</p> : null}
+              {pickup.pickupNote ? <p class="mt-1 text-sm text-ink/70">{pickup.pickupNote}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="mt-4 text-ink/80">Pickup details are confirmed when you book.</p>
+      )}
+    </section>
+
+    <GuideVehicle site={site} />
+
     {reviews.length > 0 ? (
-      <section class="mt-12" aria-labelledby="reviews-heading">
-        <h2 id="reviews-heading" class="text-2xl font-bold tracking-tight text-ink">
-          What guests say
-        </h2>
+      <section class="mt-16" aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading" class="text-2xl font-bold tracking-tight text-ink">What guests say</h2>
         <ul class="mt-4 grid gap-4 sm:grid-cols-2">
           {reviews.map((review) => (
             <li class="rounded-2xl border border-ink/10 bg-white p-5">
-              <p class="text-sm font-semibold text-ink">
+              <p class="text-brand">
                 <span aria-hidden="true">{'★'.repeat(review.rating)}</span>
                 <span class="sr-only">{review.rating} out of 5</span>
               </p>
               <blockquote class="mt-2 text-sm text-ink/80">{review.text}</blockquote>
-              <p class="mt-3 text-xs text-ink/70">
-                {review.author}
-                {review.location ? `, ${review.location}` : ''}
+              <p class="mt-3 text-sm font-medium text-ink">
+                {review.location ? `${review.author}, ${review.location}` : review.author}
               </p>
             </li>
           ))}
@@ -273,7 +286,7 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
       </section>
     ) : null}
 
-    <FaqList faqs={faqs} />
+    <FaqList faqs={faqs.slice(0, 8)} />
   </main>
 
   <div
@@ -281,13 +294,10 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
     style="padding-bottom: env(safe-area-inset-bottom)"
   >
     <div class="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-5 py-3">
-      {lowest ? (
+      {facts.price ? (
         <p class="text-sm text-ink/70">
-          From{' '}
-          <strong class="text-base font-semibold text-ink">
-            {formatCadHeadline(lowest.cents)}
-          </strong>
-          {lowest.unit === 'person' ? ' per person' : ' per vehicle'}
+          From <strong class="text-base font-semibold text-ink">{facts.price}</strong>
+          <span class="block text-xs">{facts.priceUnit}</span>
         </p>
       ) : (
         <span></span>
@@ -296,7 +306,7 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
         href="#book"
         class="rounded-pill bg-brand px-5 py-2.5 text-sm font-semibold text-bg shadow-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
-        Book now
+        {tour.isPrivate ? 'Ask for your date' : 'Check dates'}
       </a>
     </div>
   </div>

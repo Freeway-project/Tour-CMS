@@ -118,3 +118,30 @@ export function fromPrice(tour: Tour): FromPrice | null {
 
   return null;
 }
+
+/** A price with Ontario HST added, rounded to the nearest cent. */
+export function withHst(cents: number): number {
+  return cents + Math.round((cents * HST_RATE_PERCENT) / 100);
+}
+
+/**
+ * The headline price visitors compare: the tour's "from" price including HST,
+ * so it is the amount they will actually pay.
+ */
+export function fromPriceInclHst(tour: Tour): FromPrice | null {
+  const price = fromPrice(tour);
+  return price ? { cents: withHst(price.cents), unit: price.unit } : null;
+}
+
+/**
+ * The most guests one booking shares the day with. Shared tours use the tour's
+ * `maxGuests`; private tours the largest active vehicle. Null when unknown.
+ */
+export function groupLimit(tour: Tour): number | null {
+  if (!tour.isPrivate) return tour.maxGuests && tour.maxGuests > 0 ? tour.maxGuests : null;
+
+  const sizes = tour.packages
+    .filter((pkg) => pkg.isActive && typeof pkg.maxPax === 'number' && pkg.maxPax > 0)
+    .map((pkg) => pkg.maxPax ?? 0);
+  return sizes.length > 0 ? Math.max(...sizes) : null;
+}

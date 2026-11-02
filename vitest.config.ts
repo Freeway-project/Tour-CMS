@@ -13,5 +13,8 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts', 'supabase/tests/**/*.test.ts'],
     testTimeout: 30_000,
+    // Each PGlite database is built from every migration in beforeEach; under a
+    // parallel run that can take longer than the 10 s default.
+    hookTimeout: 30_000,
   },
 });

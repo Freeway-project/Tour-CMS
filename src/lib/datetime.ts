@@ -178,3 +178,15 @@ export function weekOfLabel(instant: string | Date): string {
 export function isIsoDate(value: string): boolean {
   return parseIsoDate(value) !== null;
 }
+
+/** A wall-clock time from the database (`07:45` or `07:45:00`) as `7:45 a.m.`. */
+export function formatClockTime(value: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+  if (!match) return value;
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (hours > 23) return value;
+  const suffix = hours < 12 ? 'a.m.' : 'p.m.';
+  const display = hours % 12 === 0 ? 12 : hours % 12;
+  return `${display}:${minutes} ${suffix}`;
+}

@@ -1,5 +1,8 @@
 import { faqs as fixtureFaqs, reviews as fixtureReviews, siteSettings as fixtureSiteSettings } from '../../data/fixtures';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
+
+import { parseStoredPhoto } from '../photos';
 import type { Faq, Review, SiteSettings } from '../types';
 import { supabase } from './client';
 
@@ -14,6 +17,11 @@ interface SiteSettingsRow {
   cancellation_policy: string;
   privacy_policy: string;
   terms: string;
+  guide_name: string;
+  guide_bio: string;
+  guide_photo: unknown;
+  vehicle_text: string;
+  vehicle_photo: unknown;
   announcement_enabled: boolean;
   announcement_text: string;
   announcement_href: string | null;
@@ -56,7 +64,7 @@ export async function getSiteSettings(
   const { data, error } = await client
     .from('site_settings')
     .select(
-      'name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, announcement_enabled, announcement_text, announcement_href, ratings, last_publish_at',
+      'name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, guide_name, guide_bio, guide_photo, vehicle_text, vehicle_photo, announcement_enabled, announcement_text, announcement_href, ratings, last_publish_at',
     )
     .eq('id', 1)
     .maybeSingle();
@@ -76,6 +84,12 @@ export async function getSiteSettings(
     cancellationPolicy: row.cancellation_policy,
     privacyPolicy: row.privacy_policy,
     terms: row.terms,
+    guide: {
+      name: row.guide_name,
+      bio: row.guide_bio,
+      photo: parseStoredPhoto(row.guide_photo, PUBLIC_SUPABASE_URL),
+    },
+    vehicle: { text: row.vehicle_text, photo: parseStoredPhoto(row.vehicle_photo, PUBLIC_SUPABASE_URL) },
     announcement: {
       enabled: row.announcement_enabled,
       text: row.announcement_text,

@@ -1,0 +1,42 @@
+---
+import { renderMarkdown } from '../lib/markdown';
+import { isPlaceholder } from '../lib/placeholder';
+import type { SiteSettings } from '../lib/types';
+import Photo from './Photo.astro';
+
+interface Props {
+  site: SiteSettings;
+}
+
+const { site } = Astro.props;
+const guide = !isPlaceholder(site.guide.name) && !isPlaceholder(site.guide.bio) ? site.guide : null;
+const vehicle = !isPlaceholder(site.vehicle.text) ? site.vehicle : null;
+---
+
+{guide || vehicle ? (
+  <section class="mt-16" aria-labelledby="guide-heading">
+    <h2 id="guide-heading" class="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+      {guide && vehicle ? 'Your guide and your vehicle' : guide ? 'Meet your guide' : 'Your vehicle'}
+    </h2>
+    <div class="mt-6 grid gap-6 sm:grid-cols-2">
+      {guide ? (
+        <article class="overflow-hidden rounded-2xl border border-ink/10 bg-white">
+          {guide.photo ? <Photo photo={guide.photo} sizes="(min-width: 640px) 50vw, 100vw" widths={[480, 800]} class="aspect-[4/3] w-full object-cover" /> : null}
+          <div class="p-5">
+            <h3 class="text-lg font-semibold text-ink">{guide.name}</h3>
+            <div class="mt-2 space-y-3 text-sm text-ink/80" set:html={renderMarkdown(guide.bio)} />
+          </div>
+        </article>
+      ) : null}
+      {vehicle ? (
+        <article class="overflow-hidden rounded-2xl border border-ink/10 bg-white">
+          {vehicle.photo ? <Photo photo={vehicle.photo} sizes="(min-width: 640px) 50vw, 100vw" widths={[480, 800]} class="aspect-[4/3] w-full object-cover" /> : null}
+          <div class="p-5">
+            <h3 class="text-lg font-semibold text-ink">The vehicle</h3>
+            <p class="mt-2 text-sm text-ink/80">{vehicle.text}</p>
+          </div>
+        </article>
+      ) : null}
+    </div>
+  </section>
+) : null}

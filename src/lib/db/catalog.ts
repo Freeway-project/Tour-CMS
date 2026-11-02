@@ -1,13 +1,18 @@
 import { getFixtureDepartures, pickupLocations, tours } from '../../data/fixtures';
+import { PUBLIC_SUPABASE_URL } from 'astro:env/client';
+
+import { storageImageUrl } from '../photos';
 import type {
   Addon,
   AddonPricing,
   Departure,
   DepartureStatus,
+  ItineraryStop,
   Package,
   PackagePricingMode,
   PickupLocation,
   Tour,
+  TourImage,
   TourStatus,
 } from '../types';
 import { supabase } from './client';
@@ -62,6 +67,16 @@ interface TourPickupRow {
   pickup_locations: PickupLocationRow | null;
 }
 
+interface TourImageRow {
+  id: string;
+  storage_path: string;
+  alt: string;
+  width: number;
+  height: number;
+  sort_order: number;
+  is_hero: boolean;
+}
+
 interface TourRow {
   id: string;
   slug: string;
@@ -75,6 +90,10 @@ interface TourRow {
   sort_order: number;
   highlights: string[] | null;
   important_info: string | null;
+  max_guests: number | null;
+  itinerary: unknown;
+  excludes: string[] | null;
+  tour_images: TourImageRow[] | null;
   packages: PackageRow[] | null;
   addons: AddonRow[] | null;
   tour_pickups: TourPickupRow[] | null;
@@ -102,6 +121,10 @@ const TOUR_SELECT = `
   sort_order,
   highlights,
   important_info,
+  max_guests,
+  itinerary,
+  excludes,
+  tour_images(id, storage_path, alt, width, height, sort_order, is_hero),
   packages(id, tour_id, name, description, includes, price_adult_cents, price_child_cents, price_senior_cents, pricing_mode, max_pax, is_active, sort_order),
   addons(id, tour_id, name, description, price_cents, pricing, is_active, sort_order),
   tour_pickups(pickup_time, pickup_locations(id, name, address, lat, lng, pickup_note, is_active))
@@ -166,6 +189,30 @@ function mapPickupLocation(row: PickupLocationRow, time: string | null): PickupL
   };
 }
 
+/** Keeps only well-formed `{ time, title, detail }` entries, in stored order. */
+export function parseItinerary(value: unknown): ItineraryStop[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: unknown) => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const { time, title, detail } = entry as Record<string, unknown>;
+    if (typeof time !== 'string' || typeof title !== 'string' || title.trim() === '') return [];
+    return [{ time, title, detail: typeof detail === 'string' && detail.trim() !== '' ? detail : null }];
+  });
+}
+
+function mapTourImage(row: TourImageRow): TourImage | null {
+  if (!PUBLIC_SUPABASE_URL) return null;
+  return {
+    id: row.id,
+    src: storageImageUrl(PUBLIC_SUPABASE_URL, row.storage_path),
+    alt: row.alt,
+    width: row.width,
+    height: row.height,
+    isHero: row.is_hero,
+    sortOrder: row.sort_order,
+  };
+}
+
 function mapTour(row: TourRow): Tour {
   return {
     id: row.id,
@@ -180,6 +227,13 @@ function mapTour(row: TourRow): Tour {
     sortOrder: row.sort_order,
     highlights: row.highlights ?? [],
     importantInfo: row.important_info,
+    maxGuests: row.max_guests,
+    itinerary: parseItinerary(row.itinerary),
+    excludes: row.excludes ?? [],
+    images: (row.tour_images ?? [])
+      .map(mapTourImage)
+      .filter((image): image is TourImage => image !== null)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
     packages: (row.packages ?? [])
       .filter((pkg) => pkg.is_active)
       .map(mapPackage)

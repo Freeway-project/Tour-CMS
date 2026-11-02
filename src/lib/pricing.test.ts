@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { tours } from '../data/fixtures';
-import { fromPrice, HST_RATE_PERCENT, quote } from './pricing';
+import { fromPrice, fromPriceInclHst, groupLimit, HST_RATE_PERCENT, quote, withHst } from './pricing';
 import type { Addon, Package, Tour } from './types';
 
 function makePackage(overrides: Partial<Package> = {}): Package {
@@ -201,5 +201,29 @@ describe('fromPrice', () => {
   it('returns null when a tour has nothing to sell', () => {
     const empty: Tour = { ...fixtureTour('niagara-falls-day-tour'), packages: [] };
     expect(fromPrice(empty)).toBeNull();
+  });
+});
+
+describe('all-in prices and group limits', () => {
+  const shared = tours.find((tour) => !tour.isPrivate)!;
+  const priv = tours.find((tour) => tour.isPrivate)!;
+
+  it('adds 13% HST rounded to the cent', () => {
+    expect(withHst(9900)).toBe(11187);
+    expect(withHst(69900)).toBe(78987);
+    expect(withHst(0)).toBe(0);
+  });
+
+  it('gives the from-price including HST with its unit', () => {
+    const base = fromPrice(shared)!;
+    expect(fromPriceInclHst(shared)).toEqual({ cents: withHst(base.cents), unit: base.unit });
+    expect(fromPriceInclHst({ ...shared, packages: [] })).toBeNull();
+  });
+
+  it('uses maxGuests for shared tours and the largest vehicle for private tours', () => {
+    expect(groupLimit({ ...shared, maxGuests: 11 })).toBe(11);
+    expect(groupLimit({ ...shared, maxGuests: null })).toBeNull();
+    expect(groupLimit(priv)).toBe(Math.max(...priv.packages.map((pkg) => pkg.maxPax ?? 0)));
+    expect(groupLimit({ ...priv, packages: [] })).toBeNull();
   });
 });

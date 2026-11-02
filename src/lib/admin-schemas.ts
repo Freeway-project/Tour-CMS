@@ -93,6 +93,9 @@ export const siteSettingsSchema = z.object({
   // Legal pages run long; empty means "not written yet" and hides the page.
   privacy_policy: optionalText(20000),
   terms: optionalText(20000),
+  guide_name: optionalText(80),
+  guide_bio: optionalText(2000),
+  vehicle_text: optionalText(1000),
   announcement_enabled: boolFromCheckbox.default(false),
   announcement_text: optionalText(300),
   announcement_href: optionalUrl,
@@ -127,6 +130,56 @@ export const reviewSchema = z.object({
   is_active: boolFromCheckbox.default(true),
 });
 
+const optionalInteger = (min: number, max: number) =>
+  z.preprocess(
+    (value) => (value === null || value === undefined || value === '' ? undefined : value),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+$/, 'Enter a whole number')
+      .transform((v) => Number(v))
+      .pipe(z.number().int().min(min).max(max))
+      .optional(),
+  );
+
+/**
+ * The timed day, one stop per line: `08:00 | Pickup at York St | optional detail`.
+ * Blank lines are ignored; order is kept as typed.
+ */
+export const itineraryText = z
+  .preprocess((value) => (typeof value === 'string' ? value : ''), z.string())
+  .transform((value, ctx) => {
+    const stops: Array<{ time: string; title: string; detail: string | null }> = [];
+    const lines = value.split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (line.trim() === '') return;
+      const [time = '', title = '', ...rest] = line.split('|').map((part) => part.trim());
+      const detail = rest.join(' | ').trim();
+      const match = /^([01]?\d|2[0-3])[:.]([0-5]\d)$/.exec(time);
+      if (!match || title.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Line ${index + 1}: write it as "08:00 | What happens | optional detail"`,
+        });
+        return;
+      }
+      if (title.length > 120 || detail.length > 300) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Line ${index + 1} is too long` });
+        return;
+      }
+      stops.push({ time: `${match[1]!.padStart(2, '0')}:${match[2]}`, title, detail: detail || null });
+    });
+    if (stops.length > 20) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Keep the day to 20 stops or fewer' });
+    }
+    return stops;
+  });
+
+/** Turns stored stops back into the one-per-line admin text. */
+export function itineraryToText(stops: ReadonlyArray<{ time: string; title: string; detail: string | null }>): string {
+  return stops.map((stop) => [stop.time, stop.title, stop.detail ?? ''].filter(Boolean).join(' | ')).join('\n');
+}
+
 export const tourSchema = z.object({
   title: requiredText(2, 160),
   slug: z.preprocess(
@@ -136,6 +189,9 @@ export const tourSchema = z.object({
   short_description: requiredText(2, 300),
   description: requiredText(2, 8000),
   highlights: stringArray,
+  excludes: stringArray,
+  itinerary: itineraryText,
+  max_guests: optionalInteger(1, 100),
   important_info: optionalText(4000),
   duration_hours: integerString(0, 24).default(0),
   duration_minutes_extra: integerString(0, 59).default(0),

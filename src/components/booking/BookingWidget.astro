@@ -1,4 +1,5 @@
 ---
+import { formatClockTime } from '../../lib/datetime';
 import { formatCad } from '../../lib/format';
 import { quote } from '../../lib/pricing';
 import type { Tour } from '../../lib/types';
@@ -69,7 +70,7 @@ const legendClass = 'text-base font-semibold text-ink';
                   <span class="mt-2 block text-sm text-ink/80">
                     Adult {formatCad(pkg.priceAdultCents)} · Child{' '}
                     {formatCad(pkg.priceChildCents ?? pkg.priceAdultCents)} · Senior{' '}
-                    {formatCad(pkg.priceSeniorCents ?? pkg.priceAdultCents)}
+                    {formatCad(pkg.priceSeniorCents ?? pkg.priceAdultCents)}, before HST
                   </span>
                 </span>
               </label>
@@ -198,7 +199,7 @@ const legendClass = 'text-base font-semibold text-ink';
               {pickups.map((pickup) => (
                 <option value={pickup.id}>
                   {pickup.name}
-                  {pickup.pickupTime ? ` — ${pickup.pickupTime}` : ''}
+                  {pickup.pickupTime ? ` — ${formatClockTime(pickup.pickupTime)}` : ''}
                 </option>
               ))}
             </select>

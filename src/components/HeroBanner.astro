@@ -1,0 +1,60 @@
+---
+import type { Photo as PhotoType } from '../lib/types';
+import Photo from './Photo.astro';
+
+/**
+ * Full-width banner: one photo (or a solid brand panel until there is one)
+ * with the headline, one sentence, the facts, the price and a single action.
+ * Static on purpose: no slider, nothing moves.
+ */
+interface Props {
+  photo: PhotoType | null;
+  heading: string;
+  lead?: string | null;
+  facts: string[];
+  price?: string | null;
+  priceUnit?: string | null;
+  cta?: { href: string; label: string } | null;
+  secondary?: { href: string; label: string } | null;
+}
+
+const { photo, heading, lead, facts, price, priceUnit, cta, secondary } = Astro.props;
+---
+
+<section class="relative isolate overflow-hidden bg-brand text-bg">
+  {photo ? (
+    <div class="absolute inset-0 -z-10">
+      <Photo photo={photo} sizes="100vw" widths={[640, 960, 1280, 1920]} priority class="h-full w-full object-cover" />
+      <div class="absolute inset-0 bg-ink/55"></div>
+    </div>
+  ) : null}
+  <div class="mx-auto flex min-h-[30rem] w-full max-w-5xl flex-col justify-end px-5 pt-16 pb-10 sm:min-h-[34rem] sm:px-6 sm:pb-14">
+    <h1 class="max-w-3xl text-4xl leading-tight font-bold tracking-tight text-balance sm:text-6xl">{heading}</h1>
+    {lead ? <p class="mt-4 max-w-2xl text-lg text-bg/90 text-pretty sm:text-xl">{lead}</p> : null}
+    {facts.length > 0 ? (
+      <ul class="mt-5 flex flex-wrap gap-2 text-sm font-medium">
+        {facts.map((fact) => (
+          <li class="rounded-pill bg-bg/15 px-3 py-1 ring-1 ring-bg/25">{fact}</li>
+        ))}
+      </ul>
+    ) : null}
+    <div class="mt-7 flex flex-wrap items-center gap-x-6 gap-y-4">
+      {cta ? (
+        <a href={cta.href} class="inline-flex items-center rounded-pill bg-bg px-7 py-3.5 text-base font-semibold text-brand shadow-raised transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bg">
+          {cta.label}
+        </a>
+      ) : null}
+      {price ? (
+        <p class="text-bg/90">
+          From <span class="text-2xl font-bold text-bg">{price}</span>
+          {priceUnit ? <span class="block text-sm text-bg/80">{priceUnit}</span> : null}
+        </p>
+      ) : null}
+    </div>
+    {secondary ? (
+      <p class="mt-4 text-sm">
+        <a href={secondary.href} class="font-medium text-bg underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bg">{secondary.label}</a>
+      </p>
+    ) : null}
+  </div>
+</section>
