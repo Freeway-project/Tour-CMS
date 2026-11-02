@@ -1,13 +1,14 @@
 ---
 export const prerender = false;
 
-import Base from '../../layouts/Base.astro';
+import Site from '../../layouts/Site.astro';
+import { getTours } from '../../lib/db/catalog';
+import { getSiteSettings } from '../../lib/db/content';
 import { getAdminClient } from '../../lib/db/admin';
 import { formatTorontoDate, formatTorontoTime } from '../../lib/datetime';
 import { formatCad } from '../../lib/format';
 import { isStripeConfigured } from '../../lib/stripe';
 import { tokensMatch } from '../../lib/tokens';
-import '../../styles/global.css';
 
 interface BookingRow {
   reference: string;
@@ -105,11 +106,15 @@ const title = booking
   : unavailable
     ? 'Booking unavailable'
     : 'Booking not found';
+
+const [site, tours] = await Promise.all([getSiteSettings(), getTours()]);
 ---
 
-<Base
-  title={`${title} | Toronto Niagara Tours`}
-  description="Your Niagara Falls tour reservation with Toronto Niagara Tours."
+<Site
+  site={site}
+  tours={tours}
+  title={`${title} | ${site.name}`}
+  description={`Your Niagara Falls tour reservation with ${site.name}.`}
 >
   <main class="mx-auto w-full max-w-xl px-5 py-16 sm:px-6">
     <a href="/" class="text-sm font-medium text-brand hover:underline">
@@ -268,4 +273,4 @@ const title = booking
       </div>
     )}
   </main>
-</Base>
+</Site>

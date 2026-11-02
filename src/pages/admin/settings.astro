@@ -17,6 +17,8 @@ interface SettingsRow {
   address: string;
   hst_number: string | null;
   cancellation_policy: string;
+  privacy_policy: string;
+  terms: string;
   announcement_enabled: boolean;
   announcement_text: string;
   announcement_href: string | null;
@@ -43,6 +45,8 @@ if (supabase) {
         address: data.address,
         hst_number: data.hst_number ?? null,
         cancellation_policy: data.cancellation_policy,
+        privacy_policy: data.privacy_policy ?? '',
+        terms: data.terms ?? '',
         announcement_enabled: data.announcement_enabled,
         announcement_text: data.announcement_text ?? '',
         announcement_href: data.announcement_href ?? null,
@@ -59,7 +63,7 @@ if (supabase) {
 
   const { data } = await supabase
     .from('site_settings')
-    .select('name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, announcement_enabled, announcement_text, announcement_href')
+    .select('name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, announcement_enabled, announcement_text, announcement_href')
     .eq('id', 1)
     .maybeSingle();
   settings = (data as unknown as SettingsRow) ?? null;
@@ -101,6 +105,18 @@ if (supabase) {
       <textarea name="cancellation_policy" rows="4" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.cancellation_policy ?? ''}</textarea>
       {errors.cancellation_policy ? <span class="text-xs text-red-600">{errors.cancellation_policy}</span> : null}
     </label>
+    <label class="block text-sm font-medium text-ink">Privacy policy (markdown, shown at /privacy/)
+      <textarea name="privacy_policy" rows="8" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.privacy_policy ?? ''}</textarea>
+      {errors.privacy_policy ? <span class="text-xs text-red-600">{errors.privacy_policy}</span> : null}
+    </label>
+    <label class="block text-sm font-medium text-ink">Terms and conditions (markdown, shown at /terms/)
+      <textarea name="terms" rows="8" class="mt-1 w-full rounded border border-ink/20 px-3 py-2">{settings?.terms ?? ''}</textarea>
+      {errors.terms ? <span class="text-xs text-red-600">{errors.terms}</span> : null}
+    </label>
+    <p class="text-xs text-ink/70">
+      Use ## for a heading and start lines with - for a list. A policy that is empty or starts
+      with TODO stays hidden from the footer and search engines.
+    </p>
     <label class="flex items-center gap-2 text-sm font-medium text-ink">
       <input type="checkbox" name="announcement_enabled" checked={settings?.announcement_enabled ?? false} />
       Announcement enabled

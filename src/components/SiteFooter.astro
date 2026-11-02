@@ -1,0 +1,79 @@
+---
+import { isPlaceholder } from '../lib/placeholder';
+import { policyLinks } from '../lib/policies';
+import type { SiteSettings, Tour } from '../lib/types';
+
+interface Props {
+  site: SiteSettings;
+  tours: Tour[];
+  /** Extra bottom space so a fixed mobile bar does not cover the footer. */
+  class?: string;
+}
+
+const { site, tours, class: className } = Astro.props;
+
+const visibleTours = tours.filter((tour) => tour.status !== 'hidden');
+const policies = policyLinks(site);
+const hasEmail = !isPlaceholder(site.email);
+const hasPhone = !isPlaceholder(site.phone);
+const hasAddress = !isPlaceholder(site.address);
+const phoneHref = hasPhone ? `tel:${site.phone.replace(/[^\d+]/g, '')}` : '';
+const linkClass = 'text-ink/70 hover:text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
+---
+
+<footer class:list={['border-t border-ink/10 bg-white', className]}>
+  <div class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-10 sm:flex-row sm:justify-between sm:px-6">
+    <div class="max-w-sm">
+      <p class="text-base font-semibold text-ink">{site.name}</p>
+      {hasEmail ? (
+        <p class="mt-2 text-sm text-ink/70">
+          <a href={`mailto:${site.email}`} class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            Email {site.email}
+          </a>
+        </p>
+      ) : null}
+      {hasPhone ? (
+        <p class="mt-2 text-sm text-ink/70">
+          <a href={phoneHref} class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            Call {site.phone}
+          </a>
+        </p>
+      ) : null}
+      {hasAddress ? (
+        <address class="mt-2 text-sm not-italic text-ink/70">{site.address}</address>
+      ) : null}
+    </div>
+
+    <div class="flex flex-col gap-8 sm:flex-row sm:gap-12">
+      {visibleTours.length > 0 ? (
+        <nav aria-label="Tours" class="text-sm">
+          <p class="font-semibold text-ink">Tours</p>
+          <ul class="mt-2 space-y-1.5">
+            {visibleTours.map((tour) => (
+              <li>
+                <a href={`/tours/${tour.slug}/`} class={linkClass}>
+                  {tour.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+
+      {policies.length > 0 ? (
+        <nav aria-label="Policies" class="text-sm">
+          <p class="font-semibold text-ink">Policies</p>
+          <ul class="mt-2 space-y-1.5">
+            {policies.map((policy) => (
+              <li>
+                <a href={policy.href} class={linkClass}>
+                  {policy.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+    </div>
+  </div>
+</footer>

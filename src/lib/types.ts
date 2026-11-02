@@ -148,6 +148,8 @@ export interface SiteSettings {
   address: string;
   hstNumber: string | null;
   cancellationPolicy: string;
+  privacyPolicy: string;
+  terms: string;
   announcement: { enabled: boolean; text: string; href: string | null };
   ratings: SiteRating[];
   lastPublishAt: string | null;

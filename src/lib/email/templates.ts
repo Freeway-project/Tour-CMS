@@ -1,5 +1,6 @@
 import { formatTorontoDate, formatTorontoTime } from '../datetime';
 import { formatCad } from '../format';
+import { isPlaceholder } from '../placeholder';
 import type { SiteSettings } from '../types';
 
 /**
@@ -109,13 +110,18 @@ function pickupText(data: BookingEmailData): string {
 }
 
 function layout(settings: SiteSettings, body: string): string {
+  // Fields the owner has not filled in yet (`TODO: …`) never reach a customer.
   const contactLine = [
     escapeHtml(settings.name),
-    escapeHtml(settings.address),
-    `<a href="${escapeHtml(telHref(settings.phone))}" style="color:#6b7280;">${escapeHtml(
-      settings.phone,
-    )}</a>`,
-  ].join(' · ');
+    real(settings.address) ? escapeHtml(settings.address) : '',
+    real(settings.phone)
+      ? `<a href="${escapeHtml(telHref(settings.phone))}" style="color:#6b7280;">${escapeHtml(
+          settings.phone,
+        )}</a>`
+      : '',
+  ]
+    .filter((part) => part.length > 0)
+    .join(' · ');
 
   return `<!doctype html>
 <html lang="en-CA">
@@ -154,18 +160,69 @@ function details(rows: ReadonlyArray<readonly [string, string]>): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:16px 0;">${body}</table>`;
 }
 
+function real(value: string | null | undefined): value is string {
+  return !isPlaceholder(value);
+}
+
+function joinChoices(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`;
+}
+
 function contactBlock(settings: SiteSettings): string {
-  return `<p style="${P}">
-        Call <a href="${escapeHtml(telHref(settings.phone))}" style="color:#0f766e;">${escapeHtml(
-          settings.phone,
-        )}</a>,
-        WhatsApp <a href="${escapeHtml(whatsappHref(settings.whatsapp))}" style="color:#0f766e;">${escapeHtml(
-          settings.whatsapp,
-        )}</a>, or email
-        <a href="mailto:${escapeHtml(settings.email)}" style="color:#0f766e;">${escapeHtml(
-          settings.email,
-        )}</a>.
-      </p>`;
+  const parts: string[] = [];
+  if (real(settings.phone)) {
+    parts.push(
+      `call <a href="${escapeHtml(telHref(settings.phone))}" style="color:#0f766e;">${escapeHtml(
+        settings.phone,
+      )}</a>`,
+    );
+  }
+  if (real(settings.whatsapp)) {
+    parts.push(
+      `WhatsApp <a href="${escapeHtml(whatsappHref(settings.whatsapp))}" style="color:#0f766e;">${escapeHtml(
+        settings.whatsapp,
+      )}</a>`,
+    );
+  }
+  if (real(settings.email)) {
+    parts.push(
+      `email <a href="mailto:${escapeHtml(settings.email)}" style="color:#0f766e;">${escapeHtml(
+        settings.email,
+      )}</a>`,
+    );
+  }
+  if (parts.length === 0) return `<p style="${P}">Reply to this email and we will help.</p>`;
+
+  const sentence = joinChoices(parts);
+  return `<p style="${P}">${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.</p>`;
+}
+
+function contactText(settings: SiteSettings): string {
+  const parts = [
+    real(settings.phone) ? `call ${settings.phone}` : '',
+    real(settings.whatsapp) ? `WhatsApp ${settings.whatsapp}` : '',
+    real(settings.email) ? `email ${settings.email}` : '',
+  ].filter((part) => part.length > 0);
+  if (parts.length === 0) return 'Reply to this email and we will help.';
+
+  const sentence = joinChoices(parts);
+  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+}
+
+function footerText(settings: SiteSettings): string {
+  return real(settings.address) ? `${settings.name} · ${settings.address}` : settings.name;
+}
+
+function cancellationHtml(settings: SiteSettings): string {
+  if (!real(settings.cancellationPolicy)) return '';
+  return `<h2 style="${H2}">Cancellation policy</h2>
+      <p style="${P}">${escapeHtml(settings.cancellationPolicy)}</p>`;
+}
+
+function cancellationText(settings: SiteSettings): string[] {
+  if (!real(settings.cancellationPolicy)) return [];
+  return ['Cancellation policy:', settings.cancellationPolicy, ''];
 }
 
 function addonLines(data: BookingEmailData): string {
@@ -208,8 +265,7 @@ export function customerBookingConfirmation(data: BookingEmailData): EmailConten
         <a href="${escapeHtml(data.bookingUrl)}" style="${BUTTON}">View your booking</a>
       </p>
       <p style="${MUTED}">Keep this link private: it opens your booking details.</p>
-      <h2 style="${H2}">Cancellation policy</h2>
-      <p style="${P}">${escapeHtml(data.settings.cancellationPolicy)}</p>
+      ${cancellationHtml(data.settings)}
       <h2 style="${H2}">Questions?</h2>
       ${contactBlock(data.settings)}`,
   );
@@ -241,13 +297,11 @@ export function customerBookingConfirmation(data: BookingEmailData): EmailConten
     `View your booking: ${data.bookingUrl}`,
     'Keep this link private: it opens your booking details.',
     '',
-    'Cancellation policy:',
-    data.settings.cancellationPolicy,
-    '',
+    ...cancellationText(data.settings),
     'Questions?',
-    `Call ${data.settings.phone}, WhatsApp ${data.settings.whatsapp}, or email ${data.settings.email}.`,
+    contactText(data.settings),
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };
@@ -316,7 +370,7 @@ export function ownerBookingAlert(data: BookingEmailData): EmailContent {
     '',
     `Admin: ${data.adminUrl}`,
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ]
     .filter((line, index, lines) => !(line === '' && lines[index - 1] === ''))
     .join('\n');
@@ -382,7 +436,7 @@ export function ownerBookingPaymentNeeded(data: BookingEmailData): EmailContent 
     '',
     `Admin: ${data.adminUrl}`,
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };
@@ -451,9 +505,9 @@ export function customerBookingRequestReceived(data: BookingEmailData): EmailCon
     'Keep this link private: it opens your booking details.',
     '',
     'Questions?',
-    `Call ${data.settings.phone}, WhatsApp ${data.settings.whatsapp}, or email ${data.settings.email}.`,
+    contactText(data.settings),
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };
@@ -482,7 +536,7 @@ export function ownerPaymentNeedsAttention(data: PaymentAlertEmailData): EmailCo
     '',
     `Admin: ${data.adminUrl}`,
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };
@@ -536,7 +590,7 @@ export function ownerInquiryAlert(data: InquiryEmailData): EmailContent {
     '',
     `Admin: ${data.adminUrl}`,
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };
@@ -575,9 +629,9 @@ export function customerInquiryReceived(data: InquiryEmailData): EmailContent {
     'No payment has been taken.',
     '',
     'Questions?',
-    `Call ${data.settings.phone}, WhatsApp ${data.settings.whatsapp}, or email ${data.settings.email}.`,
+    contactText(data.settings),
     '',
-    `${data.settings.name} · ${data.settings.address}`,
+    footerText(data.settings),
   ].join('\n');
 
   return { subject, html, text };

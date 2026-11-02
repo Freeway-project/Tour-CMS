@@ -4,14 +4,13 @@ export const prerender = true;
 import Button from '../components/Button.astro';
 import FaqList from '../components/FaqList.astro';
 import TourCard from '../components/TourCard.astro';
-import Base from '../layouts/Base.astro';
+import Site from '../layouts/Site.astro';
 import { getTours } from '../lib/db/catalog';
 import { getFaqs, getReviews, getSiteSettings } from '../lib/db/content';
 import { formatCadHeadline } from '../lib/format';
 import { isPlaceholder } from '../lib/placeholder';
 import { fromPrice, type FromPrice } from '../lib/pricing';
 import type { Tour } from '../lib/types';
-import '../styles/global.css';
 
 const site = await getSiteSettings();
 
@@ -118,14 +117,9 @@ const reviewItems = reviews.map((review) => {
 const heading = 'Niagara Falls Tours from Toronto';
 const description =
   'Shared and private Niagara Falls day tours from downtown Toronto, with pickup in the city centre and stops along the Niagara Parkway.';
-
-const hasEmail = !isPlaceholder(site.email);
-const hasPhone = !isPlaceholder(site.phone);
-const hasAddress = !isPlaceholder(site.address);
-const phoneHref = hasPhone ? `tel:${site.phone.replace(/[^\d+]/g, '')}` : '';
 ---
 
-<Base title={`${heading} | ${site.name}`} description={description} siteName={site.name}>
+<Site title={`${heading} | ${site.name}`} description={description} site={site} tours={tours}>
   <main class="mx-auto w-full max-w-5xl px-5 pb-16 sm:px-6">
     <section class="pt-10 pb-8 sm:pt-14 sm:pb-10">
       <p class="text-brand text-sm font-semibold tracking-widest uppercase">
@@ -221,51 +215,4 @@ const phoneHref = hasPhone ? `tel:${site.phone.replace(/[^\d+]/g, '')}` : '';
 
     <FaqList faqs={faqs} />
   </main>
-
-  <footer class="border-t border-ink/10 bg-white">
-    <div class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-10 sm:flex-row sm:justify-between sm:px-6">
-      <div class="max-w-sm">
-        <p class="text-base font-semibold text-ink">{site.name}</p>
-        {hasEmail ? (
-          <p class="mt-2 text-sm text-ink/70">
-            <a
-              href={`mailto:${site.email}`}
-              class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              Email {site.email}
-            </a>
-          </p>
-        ) : null}
-        {hasPhone ? (
-          <p class="mt-2 text-sm text-ink/70">
-            <a
-              href={phoneHref}
-              class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              Call {site.phone}
-            </a>
-          </p>
-        ) : null}
-        {hasAddress ? (
-          <address class="mt-2 text-sm not-italic text-ink/70">{site.address}</address>
-        ) : null}
-      </div>
-
-      <nav aria-label="Tours" class="text-sm">
-        <p class="font-semibold text-ink">Tours</p>
-        <ul class="mt-2 space-y-1.5">
-          {visibleTours.map((tour) => (
-            <li>
-              <a
-                href={`/tours/${tour.slug}/`}
-                class="text-ink/70 hover:text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                {tour.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </div>
-  </footer>
-</Base>
+</Site>

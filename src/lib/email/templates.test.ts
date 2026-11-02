@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { siteSettings } from '../../data/fixtures';
+import { siteSettings as fixtureSettings } from '../../data/fixtures';
 import { formatCad } from '../format';
+import type { SiteSettings } from '../types';
 import {
   customerBookingConfirmation,
   customerBookingRequestReceived,
@@ -16,6 +17,17 @@ import {
   type BookingEmailData,
   type InquiryEmailData,
 } from './templates';
+
+// The fixtures still hold `TODO:` placeholders, which emails hide; test with
+// the details an owner would have filled in.
+const siteSettings: SiteSettings = {
+  ...fixtureSettings,
+  phone: '+1 (416) 555-0142',
+  whatsapp: '+1 (416) 555-0142',
+  email: 'hello@torontoniagara.ca',
+  address: '65 Front Street West, Toronto, ON M5J 1E6',
+  cancellationPolicy: 'Free cancellation up to 24 hours before departure.',
+};
 
 const booking: BookingEmailData = {
   settings: siteSettings,
@@ -91,6 +103,17 @@ describe('customerBookingConfirmation', () => {
     expect(email.html).toContain(escapeHtml(siteSettings.address));
     expect(email.html).toContain(escapeHtml(siteSettings.cancellationPolicy));
     expect(email.text).toContain(siteSettings.email);
+  });
+
+  it('never shows placeholder business details to the customer', () => {
+    const email = customerBookingConfirmation({ ...booking, settings: fixtureSettings });
+
+    for (const body of [email.html, email.text]) {
+      expect(body).not.toMatch(/todo/i);
+      expect(body).not.toContain('Cancellation policy');
+      expect(body).not.toContain('.example');
+    }
+    expect(email.text).toContain('Reply to this email and we will help.');
   });
 
   it('shows the pickup place and time', () => {

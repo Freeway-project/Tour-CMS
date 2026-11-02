@@ -1,0 +1,50 @@
+---
+import Site from '../layouts/Site.astro';
+import { getTours } from '../lib/db/catalog';
+import { getSiteSettings } from '../lib/db/content';
+import { renderMarkdown } from '../lib/markdown';
+import { isPlaceholder } from '../lib/placeholder';
+import { POLICY_PAGES, hasPolicy, type PolicyKey } from '../lib/policies';
+
+interface Props {
+  policy: PolicyKey;
+}
+
+const { policy } = Astro.props;
+const page = POLICY_PAGES.find((entry) => entry.key === policy);
+if (!page) throw new Error(`Unknown policy page: ${policy}`);
+
+const [site, tours] = await Promise.all([getSiteSettings(), getTours()]);
+const written = hasPolicy(site, policy);
+const hasEmail = !isPlaceholder(site.email);
+---
+
+<Site
+  title={`${page.title} | ${site.name}`}
+  description={`${page.title} for ${site.name}.`}
+  site={site}
+  tours={tours}
+  noindex={!written}
+>
+  <main class="mx-auto w-full max-w-3xl px-5 pt-10 pb-16 sm:px-6">
+    <h1 class="text-3xl font-bold tracking-tight text-ink sm:text-4xl">{page.title}</h1>
+    {written ? (
+      <div
+        class="mt-6 max-w-prose space-y-4 text-base text-ink/80 [&_a]:font-medium [&_a]:text-brand [&_a]:underline [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-ink [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-ink [&_li]:mt-1 [&_strong]:text-ink [&_ul]:list-disc [&_ul]:pl-5"
+        set:html={renderMarkdown(site[policy])}
+      />
+    ) : (
+      <p class="mt-6 max-w-prose text-base text-ink/80">
+        This page is being updated.
+        {hasEmail ? (
+          <>
+            {' '}Questions?{' '}
+            <a href={`mailto:${site.email}`} class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+              Email {site.email}
+            </a>
+          </>
+        ) : null}
+      </p>
+    )}
+  </main>
+</Site>

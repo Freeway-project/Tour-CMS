@@ -5,31 +5,33 @@ import BookingWidget from '../../components/booking/BookingWidget.astro';
 import InquiryForm from '../../components/booking/InquiryForm.astro';
 import Button from '../../components/Button.astro';
 import FaqList from '../../components/FaqList.astro';
-import Base from '../../layouts/Base.astro';
+import Site from '../../layouts/Site.astro';
 import { getTours } from '../../lib/db/catalog';
 import { getFaqs, getReviews, getSiteSettings } from '../../lib/db/content';
 import { formatCad, formatCadHeadline, formatDuration } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 import { isPlaceholder } from '../../lib/placeholder';
+import { hasPolicy } from '../../lib/policies';
 import { fromPrice } from '../../lib/pricing';
 import type { Tour } from '../../lib/types';
-import '../../styles/global.css';
 
 export async function getStaticPaths() {
   const tours = await getTours();
 
   return tours
     .filter((tour) => tour.status !== 'hidden')
-    .map((tour) => ({ params: { slug: tour.slug }, props: { tour } }));
+    .map((tour) => ({ params: { slug: tour.slug }, props: { tour, tours } }));
 }
 
 interface Props {
   tour: Tour;
+  tours: Tour[];
 }
 
-const { tour } = Astro.props;
+const { tour, tours } = Astro.props;
 
 const site = await getSiteSettings();
+const showCancellation = hasPolicy(site, 'cancellationPolicy');
 
 const allReviews = await getReviews();
 const reviews = allReviews
@@ -104,12 +106,18 @@ if (structuredRating) {
 const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
 ---
 
-<Base title={title} description={description} siteName={site.name}>
+<Site
+  title={title}
+  description={description}
+  site={site}
+  tours={tours}
+  footerClass="pb-24 lg:pb-0"
+>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={productLdJson} />
   </Fragment>
 
-  <main class="mx-auto w-full max-w-3xl px-5 pt-8 pb-32 sm:px-6 lg:pb-16">
+  <main class="mx-auto w-full max-w-3xl px-5 pt-8 pb-16 sm:px-6">
     <a href="/" class="text-sm font-medium text-brand hover:underline">
       ← All tours
     </a>
@@ -230,6 +238,16 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
 
     <div class="mt-12">
       {tour.isPrivate ? <InquiryForm tour={tour} /> : <BookingWidget tour={tour} />}
+      {showCancellation ? (
+        <p class="mt-3 text-sm text-ink/70">
+          <a
+            href="/cancellation-policy/"
+            class="font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            Read the cancellation policy
+          </a>
+        </p>
+      ) : null}
     </div>
 
     {reviews.length > 0 ? (
@@ -282,4 +300,4 @@ const productLdJson = JSON.stringify(productLd).replace(/</g, '\\u003c');
       </a>
     </div>
   </div>
-</Base>
+</Site>

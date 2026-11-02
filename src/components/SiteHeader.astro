@@ -1,0 +1,18 @@
+---
+interface Props {
+  siteName: string;
+}
+
+const { siteName } = Astro.props;
+---
+
+<header class="border-b border-ink/10 bg-white">
+  <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-5 sm:px-6">
+    <a href="/" class="truncate text-base font-semibold text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+      {siteName}
+    </a>
+    <a href="/#tours" class="shrink-0 text-sm font-medium text-brand hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+      Tours
+    </a>
+  </div>
+</header>

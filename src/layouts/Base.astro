@@ -3,9 +3,11 @@ interface Props {
   title: string;
   description: string;
   siteName?: string;
+  /** Keep the page out of search results (e.g. a policy not written yet). */
+  noindex?: boolean;
 }
 
-const { title, description, siteName = 'Toronto Niagara Tours' } = Astro.props;
+const { title, description, siteName = 'Toronto Niagara Tours', noindex = false } = Astro.props;
 
 const siteUrl = Astro.site ?? new URL('https://torontoniagara.ca');
 const canonicalUrl = new URL(Astro.url.pathname, siteUrl);
@@ -18,6 +20,7 @@ const canonicalUrl = new URL(Astro.url.pathname, siteUrl);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : null}
     <link rel="canonical" href={canonicalUrl} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content={siteName} />

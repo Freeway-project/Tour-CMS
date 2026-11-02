@@ -1,40 +1,7 @@
-import { PGlite } from '@electric-sql/pglite';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import type { PGlite } from '@electric-sql/pglite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const stubPath = fileURLToPath(new URL('./supabase-stub.sql', import.meta.url));
-const initMigrationPath = fileURLToPath(new URL('../migrations/0001_init.sql', import.meta.url));
-const groupPricingMigrationPath = fileURLToPath(
-  new URL('../migrations/0002_group_pricing.sql', import.meta.url),
-);
-const ownerContentMigrationPath = fileURLToPath(
-  new URL('../migrations/0003_owner_content.sql', import.meta.url),
-);
-const adminFunctionsMigrationPath = fileURLToPath(
-  new URL('../migrations/0004_admin_functions.sql', import.meta.url),
-);
-const seedPath = fileURLToPath(new URL('../seed.sql', import.meta.url));
-
-async function createDatabase(): Promise<PGlite> {
-  const [stub, initMigration, groupPricingMigration, ownerContentMigration, adminFunctionsMigration, seed] =
-    await Promise.all([
-      readFile(stubPath, 'utf8'),
-      readFile(initMigrationPath, 'utf8'),
-      readFile(groupPricingMigrationPath, 'utf8'),
-      readFile(ownerContentMigrationPath, 'utf8'),
-      readFile(adminFunctionsMigrationPath, 'utf8'),
-      readFile(seedPath, 'utf8'),
-    ]);
-  const db = new PGlite();
-  await db.exec(stub);
-  await db.exec(initMigration);
-  await db.exec(groupPricingMigration);
-  await db.exec(ownerContentMigration);
-  await db.exec(adminFunctionsMigration);
-  await db.exec(seed);
-  return db;
-}
+import { createDatabase } from './database';
 
 describe('owner content (task 05)', () => {
   let db: PGlite;

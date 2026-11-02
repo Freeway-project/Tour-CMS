@@ -1,12 +1,17 @@
 ---
 export const prerender = true;
 
-import Base from '../../layouts/Base.astro';
-import '../../styles/global.css';
+import Site from '../../layouts/Site.astro';
+import { getTours } from '../../lib/db/catalog';
+import { getSiteSettings } from '../../lib/db/content';
+
+const [site, tours] = await Promise.all([getSiteSettings(), getTours()]);
 ---
 
-<Base
-  title="Inquiry sent | Toronto Niagara Tours"
+<Site
+  site={site}
+  tours={tours}
+  title={`Inquiry sent | ${site.name}`}
   description="Your private Niagara Falls tour inquiry has been sent."
 >
   <main class="mx-auto w-full max-w-xl px-5 py-16 sm:px-6">
@@ -28,4 +33,4 @@ import '../../styles/global.css';
       </p>
     </div>
   </main>
-</Base>
+</Site>

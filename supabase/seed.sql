@@ -185,7 +185,8 @@ select public.generate_departures();
 
 insert into public.site_settings (
   id, name, tagline, phone, whatsapp, email, address, hst_number,
-  cancellation_policy, announcement_enabled, announcement_text, announcement_href, ratings
+  cancellation_policy, privacy_policy, terms,
+  announcement_enabled, announcement_text, announcement_href, ratings
 ) values (
   1,
   'Toronto Niagara Tours',
@@ -196,6 +197,8 @@ insert into public.site_settings (
   'TODO: 65 Front Street West, Toronto, ON M5J 1E6, Canada',
   'TODO: HST registration number',
   'TODO: confirm the cancellation window with the owner. Placeholder: free cancellation up to 24 hours before departure.',
+  'TODO: the owner writes the privacy policy in /admin/settings.',
+  'TODO: the owner writes the terms and conditions in /admin/settings.',
   false,
   'TODO: announcement text',
   null,

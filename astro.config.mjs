@@ -27,7 +27,15 @@ export default defineConfig({
     imageService: 'compile',
     workerEntryPoint: { path: 'src/worker.ts', namedExports: ['scheduled'] },
   }),
-  integrations: [sitemap()],
+  // Only marketing pages belong in the sitemap. Policy pages are left out: they
+  // are noindex until the owner writes them, and the config cannot read the
+  // database to tell which ones are written.
+  integrations: [
+    sitemap({
+      filter: (page) =>
+        !/\/(admin|api|booking|404|cancellation-policy|privacy|terms)(\/|$)/.test(new URL(page).pathname),
+    }),
+  ],
   // Reject cross-origin form posts (Astro's default, kept explicit here).
   security: { checkOrigin: true },
   env: {

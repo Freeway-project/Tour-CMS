@@ -90,6 +90,9 @@ export const siteSettingsSchema = z.object({
   address: requiredText(1, 300),
   hst_number: optionalText(40),
   cancellation_policy: requiredText(1, 4000),
+  // Legal pages run long; empty means "not written yet" and hides the page.
+  privacy_policy: optionalText(20000),
+  terms: optionalText(20000),
   announcement_enabled: boolFromCheckbox.default(false),
   announcement_text: optionalText(300),
   announcement_href: optionalUrl,

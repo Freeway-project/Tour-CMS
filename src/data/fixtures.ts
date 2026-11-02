@@ -196,6 +196,8 @@ export const siteSettings: SiteSettings = {
   hstNumber: 'TODO: HST registration number',
   cancellationPolicy:
     'TODO: confirm the cancellation window with the owner. Placeholder: free cancellation up to 24 hours before departure.',
+  privacyPolicy: 'TODO: the owner writes the privacy policy in /admin/settings.',
+  terms: 'TODO: the owner writes the terms and conditions in /admin/settings.',
   announcement: { enabled: false, text: 'TODO: announcement text', href: null },
   ratings: [
     { platform: 'TODO: Google', score: 4.9, count: 0, url: 'https://example.com/todo-google-reviews' },

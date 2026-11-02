@@ -1,0 +1,31 @@
+---
+import AnnouncementBar from '../components/AnnouncementBar.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import type { SiteSettings, Tour } from '../lib/types';
+import '../styles/global.css';
+import Base from './Base.astro';
+
+/**
+ * Public page shell: announcement, header, the page's `<main>`, footer.
+ * Admin pages use `Admin.astro` instead.
+ */
+interface Props {
+  title: string;
+  description: string;
+  site: SiteSettings;
+  tours: Tour[];
+  noindex?: boolean;
+  footerClass?: string;
+}
+
+const { title, description, site, tours, noindex = false, footerClass } = Astro.props;
+---
+
+<Base title={title} description={description} siteName={site.name} noindex={noindex}>
+  <slot name="head" slot="head" />
+  <AnnouncementBar announcement={site.announcement} />
+  <SiteHeader siteName={site.name} />
+  <slot />
+  <SiteFooter site={site} tours={tours} class={footerClass} />
+</Base>

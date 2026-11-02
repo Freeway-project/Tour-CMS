@@ -12,6 +12,8 @@ interface SiteSettingsRow {
   address: string;
   hst_number: string | null;
   cancellation_policy: string;
+  privacy_policy: string;
+  terms: string;
   announcement_enabled: boolean;
   announcement_text: string;
   announcement_href: string | null;
@@ -54,7 +56,7 @@ export async function getSiteSettings(
   const { data, error } = await client
     .from('site_settings')
     .select(
-      'name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, announcement_enabled, announcement_text, announcement_href, ratings, last_publish_at',
+      'name, tagline, phone, whatsapp, email, address, hst_number, cancellation_policy, privacy_policy, terms, announcement_enabled, announcement_text, announcement_href, ratings, last_publish_at',
     )
     .eq('id', 1)
     .maybeSingle();
@@ -72,6 +74,8 @@ export async function getSiteSettings(
     address: row.address,
     hstNumber: row.hst_number,
     cancellationPolicy: row.cancellation_policy,
+    privacyPolicy: row.privacy_policy,
+    terms: row.terms,
     announcement: {
       enabled: row.announcement_enabled,
       text: row.announcement_text,

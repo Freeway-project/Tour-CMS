@@ -1,0 +1,26 @@
+---
+import { isPlaceholder } from '../lib/placeholder';
+import type { SiteSettings } from '../lib/types';
+
+interface Props {
+  announcement: SiteSettings['announcement'];
+}
+
+const { announcement } = Astro.props;
+const show = announcement.enabled && !isPlaceholder(announcement.text);
+const href = announcement.href && !isPlaceholder(announcement.href) ? announcement.href : null;
+---
+
+{show ? (
+  <div class="bg-brand text-bg">
+    <p class="mx-auto w-full max-w-5xl px-5 py-2 text-center text-sm font-medium sm:px-6">
+      {href ? (
+        <a href={href} class="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bg">
+          {announcement.text}
+        </a>
+      ) : (
+        announcement.text
+      )}
+    </p>
+  </div>
+) : null}

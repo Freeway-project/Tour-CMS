@@ -27,11 +27,37 @@ function renderInline(text: string): string {
     .replace(/\n/g, '<br />');
 }
 
-/** Renders a Markdown string to HTML for `set:html`. */
+function renderBlock(block: string): string {
+  // `## ` and `### ` only: the page itself owns the `<h1>`.
+  const heading = /^(#{2,3}) +(.+)$/.exec(block);
+  if (heading && !block.includes('\n')) {
+    const level = heading[1]!.length;
+    return `<h${level}>${renderInline(escapeHtml(heading[2]!.trim()))}</h${level}>`;
+  }
+
+  const lines = block.split('\n');
+  if (lines.every((line) => /^[-*] +\S/.test(line))) {
+    const items = lines.map(
+      (line) => `<li>${renderInline(escapeHtml(line.replace(/^[-*] +/, '').trim()))}</li>`,
+    );
+    return `<ul>${items.join('')}</ul>`;
+  }
+
+  return `<p>${renderInline(escapeHtml(block))}</p>`;
+}
+
+/**
+ * Renders a Markdown string to HTML for `set:html`: paragraphs, `##`/`###`
+ * headings, `-` lists, links, bold and italics. Blocks are separated by a
+ * blank line.
+ */
 export function renderMarkdown(markdown: string): string {
   return markdown
+    .replace(/\r\n?/g, '\n')
     .trim()
     .split(/\n{2,}/)
-    .map((block) => `<p>${renderInline(escapeHtml(block.trim()))}</p>`)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0)
+    .map(renderBlock)
     .join('\n');
 }
